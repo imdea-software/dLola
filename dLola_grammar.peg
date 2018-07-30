@@ -13,10 +13,12 @@ Input  <- _? d:(Declaration*)  EOF {
        return d,nil
        }
 
-Declaration <- i:InputStreamDecl   { return i,nil }
+Declaration <- com:Comment
+ 	    / i:InputStreamDecl   { return i,nil }
 	    / k:Const              { return k,nil }
 //	    / o:OutputStreamDecl       { return o,nil }
 	    / d:OutputDefinition   { return d,nil }
+	     
 
 Const <- CONST t:Type n:Name ASSIGN e:Expr { 
       // if !checkGround(e) { return nil,err }
@@ -32,7 +34,7 @@ OutputDefinition <- d:DefOut t:Type n:Name _? ASSIGN e:Block {
 		 if d == "output"{
 		    NewOutputDecl(n,t) //store it
 		 }
-    return NewOutputDefinition(n,t,e),nil	 		 
+    return NewOutputDefinition(n,t,e),nil
 }
 
 DefOut <- DEFINE / OUTPUT{
@@ -119,8 +121,8 @@ BasicNumExpr <- '(' _? n:NumExpr ')' _?   { return n,nil }
 
 
 /*Atoms used for every theory(type)*/
-Atomic <- e:StreamExpr              { return NewStreamOffsetExpr(e),nil }
-       	  / co:Constant		    { return co, nil}
+Atomic <- co:Constant		    { return co, nil}
+       	  / e:StreamExpr              { return NewStreamOffsetExpr(e),nil }
 	  / f: Function		    {return f, nil}
         
 StreamExpr <- n:Name "["  _? t:OffsetExpr _? "|" _? Constant _? "]" _? { return NewStreamFetchExpr(n,t),nil }
@@ -181,10 +183,11 @@ Tag  "tag"      <- ( '#'[a-zA-Z](['_''-''.'a-zA-Z0-9])* )    { return Tag{string
 
 _ "whitespace" <- [ \t\n\r]+
 
+
 //EOL     <- _? Comment? ("\r\n" / "\n\r" / "\r" / "\n" / EOF)
 EOL     <- ("\r\n" / "\n\r" / "\r" / "\n")
 
-Comment <- "//" [^\r\n]*
+Comment <- "//" [^\r\n]* [\r\n] {return "//",nil }
 
 EOF     <- !.
 
