@@ -83,8 +83,9 @@ NegExpr     <- NOT p:NegExpr {
 	 /  p:Primary { return p,nil }
 	 
 Primary   <- '(' _? p:BooleanExpr ')' _?  { return p,nil }
-	     / a:Atomic {return a, nil}
-         / n:NumComparison              { return NewNumComparisonPredicate(n),nil }
+	   / n:NumComparison              { return BooleanExprToExpr(NewNumComparisonPredicate(n)),nil }	
+	   / a:Atomic {return a, nil}
+        
 
 NumComparison <- a:NumExpr "<"  _? b:NumExpr { return NewNumLess(a,b),nil }
               /  a:NumExpr "<=" _? b:NumExpr { return NewNumLessEq(a,b),nil }

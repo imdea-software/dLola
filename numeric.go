@@ -121,12 +121,13 @@ type NumExpr interface {
 type NumExprVisitor interface {
 	VisitIntLiteralExpr(IntLiteralExpr)     //
 	VisitFloatLiteralExpr(FloatLiteralExpr) //
-	VisitStreamOffsetExpr(StreamOffsetExpr)
-	VisitConst(ConstExpr)
-	VisitNumMulExpr(NumMulExpr)     //
-	VisitNumDivExpr(NumDivExpr)     //
-	VisitNumPlusExpr(NumPlusExpr)   //
-	VisitNumMinusExpr(NumMinusExpr) //
+	VisitStreamOffsetExpr(StreamOffsetExpr) //same method with same arguments as in ExprVisitor
+	VisitConstExpr(ConstExpr)               //same method with same arguments as in ExprVisitor
+	VisitIfThenElseExpr(IfThenElseExpr)     //same method with same arguments as in ExprVisitor
+	VisitNumMulExpr(NumMulExpr)             //
+	VisitNumDivExpr(NumDivExpr)             //
+	VisitNumPlusExpr(NumPlusExpr)           //
+	VisitNumMinusExpr(NumMinusExpr)         //
 	//	VisitNumPathExpr(NumPathExpr)
 }
 
@@ -174,20 +175,6 @@ func NewFloatLiteralExpr(a interface{}) FloatLiteralExpr {
 }
 
 func (e NumMulExpr) Sprint() string {
-	return fmt.Sprintf("%s(\n\t%s,\n\t%s\n\t)", "*", e.Left.Sprint(), e.Right.Sprint())
-}
-func (e NumDivExpr) Sprint() string {
-	return fmt.Sprintf("%s(\n\t%s,\n\t%s\n\t)", "/", e.Left.Sprint(), e.Right.Sprint())
-}
-func (e NumPlusExpr) Sprint() string {
-	return fmt.Sprintf("%s(\n\t%s,\n\t%s\n\t)", "+", e.Left.Sprint(), e.Right.Sprint())
-}
-func (e NumMinusExpr) Sprint() string {
-	return fmt.Sprintf("%s(\n\t%s,\n\t%s\n\t)", "-", e.Left.Sprint(), e.Right.Sprint())
-}
-
-/*INFIX NOTATION
-func (e NumMulExpr) Sprint() string {
 	return fmt.Sprintf("(%s)%s(%s)", e.Left.Sprint(), "*", e.Right.Sprint())
 }
 func (e NumDivExpr) Sprint() string {
@@ -199,7 +186,7 @@ func (e NumPlusExpr) Sprint() string {
 func (e NumMinusExpr) Sprint() string {
 	return fmt.Sprintf("(%s)%s(%s)", e.Left.Sprint(), "-", e.Right.Sprint())
 }
-*/
+
 func (e IntLiteralExpr) Sprint() string {
 	return strconv.Itoa(e.Num)
 }
@@ -228,8 +215,11 @@ func (e FloatLiteralExpr) AcceptNum(v NumExprVisitor) {
 func (e StreamOffsetExpr) AcceptNum(v NumExprVisitor) {
 	v.VisitStreamOffsetExpr(e)
 }
+func (e IfThenElseExpr) AcceptNum(v NumExprVisitor) {
+	v.VisitIfThenElseExpr(e)
+}
 func (e ConstExpr) AcceptNum(v NumExprVisitor) {
-	v.VisitConst(e)
+	v.VisitConstExpr(e)
 }
 
 //

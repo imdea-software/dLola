@@ -16,9 +16,9 @@ type BooleanExprVisitor interface {
 	VisitNotPredicate(NotPredicate)
 	VisitAndPredicate(AndPredicate)
 	VisitOrPredicate(OrPredicate)
-	VisitIfThenElse(IfThenElseExpr)
-	VisitConstExpr(ConstExpr)
-	VisitStreamOffset(StreamOffsetExpr)
+	VisitIfThenElseExpr(IfThenElseExpr)     //same method with same arguments as in ExprVisitor
+	VisitConstExpr(ConstExpr)               //same method with same arguments as in ExprVisitor
+	VisitStreamOffsetExpr(StreamOffsetExpr) //same method with same arguments as in ExprVisitor
 	//
 	VisitNumComparisonPredicate(NumComparisonPredicate)
 	//	VisitPathPredicate(PathPredicate)
@@ -129,6 +129,9 @@ func (p TruePredicate) Sprint() string {
 func (p FalsePredicate) Sprint() string {
 	return fmt.Sprintf("false")
 }
+func (p NumComparisonPredicate) Sprint() string {
+	return p.Comp.Sprint()
+}
 
 func (this TruePredicate) AcceptBool(v BooleanExprVisitor) {
 	v.VisitTruePredicate(this)
@@ -145,11 +148,12 @@ func (this AndPredicate) AcceptBool(v BooleanExprVisitor) {
 func (this OrPredicate) AcceptBool(v BooleanExprVisitor) {
 	v.VisitOrPredicate(this)
 }
+
 func (this IfThenElseExpr) AcceptBool(v BooleanExprVisitor) {
-	v.VisitIfThenElse(this)
+	v.VisitIfThenElseExpr(this)
 }
 
-// ConstExpr implement AcceptBool so SttreamExpr are BooleanExpr
+// ConstExpr implement AcceptBool so StreamExpr are BooleanExpr
 
 func (this ConstExpr) AcceptBool(v BooleanExprVisitor) {
 	v.VisitConstExpr(this)
@@ -158,7 +162,7 @@ func (this ConstExpr) AcceptBool(v BooleanExprVisitor) {
 // StreamExpr impleemnts AcceptBool so StreamExpr are Booleanexpr
 
 func (this StreamOffsetExpr) AcceptBool(v BooleanExprVisitor) {
-	v.VisitStreamOffset(this)
+	v.VisitStreamOffsetExpr(this)
 }
 
 func (this NumComparisonPredicate) AcceptBool(v BooleanExprVisitor) {

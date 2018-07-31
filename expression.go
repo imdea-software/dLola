@@ -26,16 +26,18 @@ type Expr interface {
 	Accept(ExprVisitor)
 }
 type ExprVisitor interface {
+	VisitConstExpr(ConstExpr)
 	VisitLetExpr(LetExpr)
 	VisitIfThenElseExpr(IfThenElseExpr)
 	// VisitStringExpr(StringExpr)
-	VisitNumericExpr(NumericExpr)
-	VisitTimeExpr(TimeExpr)
-	VisitBoolExpr(BoolExpr)
 	VisitStreamOffsetExpr(StreamOffsetExpr)
+	VisitBoolExpr(BoolExpr)
+	VisitNumericExpr(NumericExpr)
+	/*striver
+	VisitTimeExpr(TimeExpr)
 	VisitOutsideExpr(OutsideExpr)
 	VisitNoTickExpr(NoTickExpr)
-	VisitConstant(ConstExpr)
+	*/
 }
 
 type ConstExpr struct { // implements Expr,NumExpr,BoolExpr
@@ -60,18 +62,17 @@ type BoolExpr struct {
 type NumericExpr struct {
 	NExpr NumExpr
 }
+
+/*striver
 type TimeExpr struct {
 	TExpr Time
 }
 type OutsideExpr struct{}
 type NoTickExpr struct{}
-
+*/
 // Accept
 func (this ConstExpr) Accept(visitor ExprVisitor) {
-	visitor.VisitConstant(this)
-}
-func (this OutsideExpr) Accept(visitor ExprVisitor) {
-	visitor.VisitOutsideExpr(this)
+	visitor.VisitConstExpr(this)
 }
 func (this LetExpr) Accept(visitor ExprVisitor) {
 	visitor.VisitLetExpr(this)
@@ -79,21 +80,27 @@ func (this LetExpr) Accept(visitor ExprVisitor) {
 func (this IfThenElseExpr) Accept(visitor ExprVisitor) {
 	visitor.VisitIfThenElseExpr(this)
 }
-func (this NumericExpr) Accept(visitor ExprVisitor) {
-	visitor.VisitNumericExpr(this)
-}
-func (this TimeExpr) Accept(visitor ExprVisitor) {
-	visitor.VisitTimeExpr(this)
-}
 func (this StreamOffsetExpr) Accept(visitor ExprVisitor) {
 	visitor.VisitStreamOffsetExpr(this)
 }
 func (this BoolExpr) Accept(visitor ExprVisitor) {
 	visitor.VisitBoolExpr(this)
 }
+func (this NumericExpr) Accept(visitor ExprVisitor) {
+	visitor.VisitNumericExpr(this)
+}
+
+/*striver
+func (this TimeExpr) Accept(visitor ExprVisitor) {
+	visitor.VisitTimeExpr(this)
+}
+func (this OutsideExpr) Accept(visitor ExprVisitor) {
+	visitor.VisitOutsideExpr(this)
+}
 func (this NoTickExpr) Accept(visitor ExprVisitor) {
 	visitor.VisitNoTickExpr(this)
 }
+*/
 
 // Sprint()
 func (this ConstExpr) Sprint() string {
@@ -113,14 +120,16 @@ func (this IfThenElseExpr) Sprint() string {
 func (this NumericExpr) Sprint() string {
 	return this.NExpr.Sprint()
 }
-func (this TimeExpr) Sprint() string {
-	return this.TExpr.Sprint()
-}
 func (this StreamOffsetExpr) Sprint() string {
 	return this.SExpr.Sprint()
 }
 func (this BoolExpr) Sprint() string {
 	return this.BExpr.Sprint()
+}
+
+/*striver
+func (this TimeExpr) Sprint() string {
+	return this.TExpr.Sprint()
 }
 func (this NoTickExpr) Sprint() string {
 	return "notick"
@@ -133,7 +142,7 @@ var (
 	TheOutsideExpr OutsideExpr
 	TheNoTickExpr  NoTickExpr
 )
-
+*/
 func NewConstExpr(a interface{}) ConstExpr {
 	return ConstExpr{getStreamName(a)}
 }
@@ -142,9 +151,6 @@ func NewNumericExpr(a interface{}) NumericExpr {
 }
 func NewStreamOffsetExpr(a interface{}) StreamOffsetExpr {
 	return StreamOffsetExpr{a.(StreamExpr)}
-}
-func NewTimeExpr(a interface{}) TimeExpr {
-	return TimeExpr{a.(Time)}
 }
 func NewBoolExpr(b interface{}) BoolExpr {
 	return BoolExpr{b.(BooleanExpr)}
@@ -157,6 +163,11 @@ func NewLetExpr(n, e, b interface{}) LetExpr {
 	return LetExpr{name, e.(Expr), b.(Expr)}
 }
 
+/*striver
+func NewTimeExpr(a interface{}) TimeExpr {
+	return TimeExpr{a.(Time)}
+}
+*/
 //
 // StreamExpr : s(~t) s(t~) s(<t) s(t>) s(s<t) ...
 //
@@ -166,13 +177,15 @@ type StreamExpr interface {
 }
 
 type StreamExprVisitor interface {
-	VisitPrevEqValExpr(PrevEqValExpr)
-	VisitPrevValExpr(PrevValExpr)
-	VisitSuccEqValExpr(SuccEqValExpr)
-	VisitSuccValExpr(SuccValExpr)
+	/*	VisitPrevEqValExpr(PrevEqValExpr)
+		VisitPrevValExpr(PrevValExpr)
+		VisitSuccEqValExpr(SuccEqValExpr)
+		VisitSuccValExpr(SuccValExpr)
+	*/
 	VisitStreamFetchExpr(StreamFetchExpr)
 }
 
+/*
 type PrevEqValExpr struct { //implements StreamExpr
 	Name StreamName
 	Expr Time
@@ -188,12 +201,13 @@ type SuccEqValExpr struct { //implements StreamExpr
 type SuccValExpr struct { //implements StreamExpr
 	Name StreamName
 	Expr Time
-}
+}*/
 type StreamFetchExpr struct { //implements StreamExpr
 	Name   StreamName
 	Offset OffsetExpr
 }
 
+/*
 func NewPrevEqValExpr(s, t interface{}) PrevEqValExpr {
 	name := getStreamName(s)
 	return PrevEqValExpr{name, t.(Time)}
@@ -210,12 +224,14 @@ func NewSuccValExpr(s, t interface{}) SuccValExpr {
 	name := getStreamName(s)
 	return SuccValExpr{name, t.(Time)}
 }
+*/
 func NewStreamFetchExpr(s, t interface{}) StreamFetchExpr {
 	offset := t.(OffsetExpr)
 	name := getStreamName(s)
 	return StreamFetchExpr{name, offset}
 }
 
+/*
 func (e PrevEqValExpr) Sprint() string {
 	return fmt.Sprintf("%s(~ %s )", e.Name.Sprint(), e.Expr.Sprint())
 }
@@ -228,10 +244,12 @@ func (e SuccEqValExpr) Sprint() string {
 func (e SuccValExpr) Sprint() string {
 	return fmt.Sprintf("%s( %s >)", e.Name.Sprint(), e.Expr.Sprint())
 }
+*/
 func (e StreamFetchExpr) Sprint() string {
-	return fmt.Sprintf("%s(%s)", e.Name.Sprint(), e.Offset.Sprint())
+	return fmt.Sprintf("%s[%s]", e.Name.Sprint(), e.Offset.Sprint())
 }
 
+/*
 func (this PrevEqValExpr) AcceptStream(v StreamExprVisitor) {
 	v.VisitPrevEqValExpr(this)
 }
@@ -244,6 +262,7 @@ func (this SuccEqValExpr) AcceptStream(v StreamExprVisitor) {
 func (this SuccValExpr) AcceptStream(v StreamExprVisitor) {
 	v.VisitSuccValExpr(this)
 }
+*/
 func (this StreamFetchExpr) AcceptStream(v StreamExprVisitor) {
 	v.VisitStreamFetchExpr(this)
 }
@@ -251,6 +270,7 @@ func (this StreamFetchExpr) AcceptStream(v StreamExprVisitor) {
 //
 // Time
 //
+/*striver
 type TimeBasic interface {
 	//Accept(...)
 	Sprint() string
@@ -290,7 +310,7 @@ var (
 func (t Time_t) Sprint() string {
 	return "t"
 }
-
+*/
 //
 // Offset
 //
@@ -298,6 +318,7 @@ type OffsetExpr interface { // OffsetExpr "implements" Time
 	Sprint() string
 }
 
+/*striver
 type PrevEqExpr struct { // implements OffsetExpr
 	Name StreamName
 	Time Time
@@ -345,3 +366,4 @@ func (e SuccEqExpr) Sprint() string {
 func (e SuccExpr) Sprint() string {
 	return fmt.Sprintf("%s>>%s", e.Name.Sprint(), e.Time.Sprint())
 }
+*/
