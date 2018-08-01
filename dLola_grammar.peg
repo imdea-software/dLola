@@ -18,7 +18,6 @@ Declaration <- com:Comment
 	    / k:Const              { return k,nil }
 //	    / o:OutputStreamDecl       { return o,nil }
 	    / d:OutputDefinition   { return d,nil }
-	     
 
 Const <- CONST t:Type n:Name ASSIGN e:Expr { 
       // if !checkGround(e) { return nil,err }
@@ -84,16 +83,26 @@ NegExpr     <- NOT p:NegExpr {
 	 
 Primary   <- '(' _? p:BooleanExpr ')' _?  { return p,nil }
 	   / n:NumComparison              { return BooleanExprToExpr(NewNumComparisonPredicate(n)),nil }	
-	   / a:Atomic {return a, nil}
-        
+	   / a:Atomic {return a, nil}  
 
-NumComparison <- a:NumExpr "<"  _? b:NumExpr { return NewNumLess(a,b),nil }
-              /  a:NumExpr "<=" _? b:NumExpr { return NewNumLessEq(a,b),nil }
-              /  a:NumExpr "="  _? b:NumExpr { return NewNumEq(a,b),nil }
-              /  a:NumExpr ">"  _? b:NumExpr { return NewNumGreater(a,b),nil }
-              /  a:NumExpr ">=" _? b:NumExpr { return NewNumGreaterEq(a,b),nil }
-	      /	 a:NumExpr "!=" _? b:NumExpr { return NewNumNotEq(a,b),nil }
-
+NumComparison <- a:NumExpr "<"  _? b:NumExpr { na:= a.(NumericExpr)
+	      	 	   	   	     nb:= b.(NumericExpr)
+	      	 	   	   	     return NewNumLess(na.NExpr,nb.NExpr),nil }
+              /  a:NumExpr "<=" _? b:NumExpr { na:= a.(NumericExpr)
+	      	 	   	   	     nb:= b.(NumericExpr)
+					     return NewNumLessEq(na.NExpr,nb.NExpr),nil }
+              /  a:NumExpr "="  _? b:NumExpr { na:= a.(NumericExpr)
+	      	 	   	   	     nb:= b.(NumericExpr)
+					     return NewNumEq(na.NExpr,nb.NExpr),nil }
+              /  a:NumExpr ">"  _? b:NumExpr { na:= a.(NumericExpr)
+	      	 	   	   	     nb:= b.(NumericExpr)
+					     return NewNumGreater(na.NExpr,nb.NExpr),nil }
+              /  a:NumExpr ">=" _? b:NumExpr { na:= a.(NumericExpr)
+	      	 	   	   	     nb:= b.(NumericExpr)
+					     return NewNumGreaterEq(na.NExpr,nb.NExpr),nil }
+	      /	 a:NumExpr "!=" _? b:NumExpr { na:= a.(NumericExpr)
+	      	 	   	   	     nb:= b.(NumericExpr)
+					     return NewNumNotEq(na.NExpr,nb.NExpr),nil }
 
 /*Numeric expressions*/
 NumExpr  <- a:Mults b:(Plus*) {
@@ -119,7 +128,6 @@ MoreMults <- '*' _? e:BasicNumExpr { return NewRightMultExpr(e),nil } // common.
 	  
 BasicNumExpr <- '(' _? n:NumExpr ')' _?   { return n,nil }
            / a:Atomic { return a,nil }
-
 
 /*Atoms used for every theory(type)*/
 Atomic <- co:Constant		    { return co, nil}
@@ -183,7 +191,6 @@ Alphanum <- ([a-zA-Z0-9]+) { return Alphanum{string(c.text)},nil }
 Tag  "tag"      <- ( '#'[a-zA-Z](['_''-''.'a-zA-Z0-9])* )    { return Tag{string(c.text)},nil }
 
 _ "whitespace" <- [ \t\n\r]+
-
 
 //EOL     <- _? Comment? ("\r\n" / "\n\r" / "\r" / "\n" / EOF)
 EOL     <- ("\r\n" / "\n\r" / "\r" / "\n")
