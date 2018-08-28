@@ -27,7 +27,7 @@ type Expr interface {
 }
 type ExprVisitor interface {
 	VisitConstExpr(ConstExpr)
-	VisitLetExpr(LetExpr)
+	//	VisitLetExpr(LetExpr)
 	VisitIfThenElseExpr(IfThenElseExpr)
 	// VisitStringExpr(StringExpr)
 	VisitStreamOffsetExpr(StreamOffsetExpr)
@@ -43,11 +43,12 @@ type ExprVisitor interface {
 type ConstExpr struct { // implements Expr,NumExpr,BoolExpr
 	Name StreamName
 }
-type LetExpr struct {
+
+/*type LetExpr struct {
 	Name StreamName
 	Bind Expr
 	Body Expr
-}
+}*/
 type IfThenElseExpr struct { // implements Expr,NumExpr,BoolExpr
 	If   Expr
 	Then Expr
@@ -74,9 +75,10 @@ type NoTickExpr struct{}
 func (this ConstExpr) Accept(visitor ExprVisitor) {
 	visitor.VisitConstExpr(this)
 }
-func (this LetExpr) Accept(visitor ExprVisitor) {
+
+/*func (this LetExpr) Accept(visitor ExprVisitor) {
 	visitor.VisitLetExpr(this)
-}
+}*/
 func (this IfThenElseExpr) Accept(visitor ExprVisitor) {
 	visitor.VisitIfThenElseExpr(this)
 }
@@ -106,11 +108,12 @@ func (this NoTickExpr) Accept(visitor ExprVisitor) {
 func (this ConstExpr) Sprint() string {
 	return string(this.Name)
 }
-func (this LetExpr) Sprint() string {
+
+/*func (this LetExpr) Sprint() string {
 	bind := this.Bind.Sprint()
 	body := this.Bind.Sprint()
 	return fmt.Sprintf("let %s = %s in %s", this.Name, bind, body)
-}
+}*/
 func (this IfThenElseExpr) Sprint() string {
 	if_part := this.If.Sprint()
 	then_part := this.Then.Sprint()
@@ -158,10 +161,11 @@ func NewBoolExpr(b interface{}) BoolExpr {
 func NewIfThenElseExpr(p, a, b interface{}) IfThenElseExpr {
 	return IfThenElseExpr{p.(Expr), a.(Expr), b.(Expr)}
 }
-func NewLetExpr(n, e, b interface{}) LetExpr {
+
+/*func NewLetExpr(n, e, b interface{}) LetExpr {
 	name := getStreamName(n)
 	return LetExpr{name, e.(Expr), b.(Expr)}
-}
+}*/
 
 /*striver
 func NewTimeExpr(a interface{}) TimeExpr {

@@ -226,25 +226,38 @@ func (e ConstExpr) AcceptNum(v NumExprVisitor) {
 //
 //
 func getNumExpr(e interface{}) (NumExpr, error) {
-	if v, ok := e.(NumericExpr); ok {
+	switch v := e.(type) {
+	case NumericExpr:
 		return v.NExpr, nil
-	} else if v, ok := e.(StreamOffsetExpr); ok {
+	case StreamOffsetExpr:
 		return v, nil
-	} else if k, ok := e.(ConstExpr); ok {
-		return k, nil
-	} else {
+	case ConstExpr:
+		return v, nil
+	case NumExpr:
+		return v, nil
+	default:
 		str := fmt.Sprintf("cannot convert to num \"%s\"\n", e.(Expr).Sprint())
 		return nil, errors.New(str)
 	}
+
 }
 func NumExprToExpr(expr NumExpr) Expr {
-	if s, ok := expr.(StreamOffsetExpr); ok {
+	/*if s, ok := expr.(StreamOffsetExpr); ok {
 		return s
 	} else if k, ok := expr.(ConstExpr); ok {
 		return k
 	} else {
 		return NewNumericExpr(expr)
+	}*/
+	switch v := expr.(type) {
+	case StreamOffsetExpr:
+		return v
+	case ConstExpr:
+		return v
+	default:
+		return NewNumericExpr(expr) //note: here we use expr, not its type
 	}
+
 }
 
 // FLATTEN

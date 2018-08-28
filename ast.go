@@ -115,6 +115,7 @@ func (o OutputDefinition) Sprint() string {
 	return fmt.Sprintf("OutputDefinition: {Name = %s, Type = %s, expr = %s}", o.Name.Sprint(), o.Type.Sprint(), o.Expr.Sprint())
 }
 
+/*Pretty Print using method Accept*/
 func (c ConstDecl) PrettyPrint() string {
 	v := PrettyPrinterVisitor{0, ""}
 	c.Val.Accept(&v)

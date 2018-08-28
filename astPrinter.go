@@ -16,9 +16,9 @@ func (v *PrettyPrinterVisitor) VisitConstExpr(c ConstExpr) {
 	v.s += c.Sprint()
 }
 
-func (v *PrettyPrinterVisitor) VisitLetExpr(l LetExpr) {
+/*func (v *PrettyPrinterVisitor) VisitLetExpr(l LetExpr) {
 	prettyLet(v, l)
-}
+}*/
 
 func (v *PrettyPrinterVisitor) VisitIfThenElseExpr(ite IfThenElseExpr) {
 	prettyIf(v, ite)
@@ -147,7 +147,7 @@ func prettyIf(v *PrettyPrinterVisitor, ite IfThenElseExpr) {
 	v.layer-- //NOW LAYER
 }
 
-func prettyLet(v *PrettyPrinterVisitor, l LetExpr) {
+/*func prettyLet(v *PrettyPrinterVisitor, l LetExpr) {
 	tabsNow := strings.Repeat("\t", v.layer)
 	tabs := tabsNow + "\t"
 	v.layer++ //NEXT LAYER
@@ -158,3 +158,4 @@ func prettyLet(v *PrettyPrinterVisitor, l LetExpr) {
 	v.s += "\n}" + tabs + "}\n"
 	v.layer-- //NOW LAYER
 }
+*/

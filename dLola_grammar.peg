@@ -44,8 +44,8 @@ DefOut <- DEFINE / OUTPUT{
     return NewOutputDecl(n,t),nil	  
 }*/
 
-Block <- LET n:Name ASSIGN e:Expr IN b:Block _? { return NewLetExpr(n,e,b),nil }
-      / e:Expr                                  { return e,nil }
+Block <- // LET n:Name ASSIGN e:Expr IN b:Block _? { return NewLetExpr(n,e,b),nil }
+       e:Expr                                  { return e,nil }
 
 Expr <- IF p:BooleanExpr THEN a:Expr ELSE b:Expr { return NewIfThenElseExpr(p,a,b),nil }
      / b:BooleanExpr { return b,nil }
@@ -82,33 +82,40 @@ NegExpr     <- NOT p:NegExpr {
 	 /  p:Primary { return p,nil }
 	 
 Primary   <- '(' _? p:BooleanExpr ')' _?  { return p,nil }
+	   / a:Atomic {return a, nil}  // old:return a,nil testing:getBoolExpr(a)
 	   / n:NumComparison              { return BooleanExprToExpr(NewNumComparisonPredicate(n)),nil }	
-	   / a:Atomic {return a, nil}  
 
-NumComparison <- a:NumExpr "<"  _? b:NumExpr { na:= a.(NumericExpr)
-	      	 	   	   	     nb:= b.(NumericExpr)
-	      	 	   	   	     return NewNumLess(na.NExpr,nb.NExpr),nil }
-              /  a:NumExpr "<=" _? b:NumExpr { na:= a.(NumericExpr)
-	      	 	   	   	     nb:= b.(NumericExpr)
-					     return NewNumLessEq(na.NExpr,nb.NExpr),nil }
-              /  a:NumExpr "="  _? b:NumExpr { na:= a.(NumericExpr)
-	      	 	   	   	     nb:= b.(NumericExpr)
-					     return NewNumEq(na.NExpr,nb.NExpr),nil }
-              /  a:NumExpr ">"  _? b:NumExpr { na:= a.(NumericExpr)
-	      	 	   	   	     nb:= b.(NumericExpr)
-					     return NewNumGreater(na.NExpr,nb.NExpr),nil }
-              /  a:NumExpr ">=" _? b:NumExpr { na:= a.(NumericExpr)
-	      	 	   	   	     nb:= b.(NumericExpr)
-					     return NewNumGreaterEq(na.NExpr,nb.NExpr),nil }
-	      /	 a:NumExpr "!=" _? b:NumExpr { na:= a.(NumericExpr)
-	      	 	   	   	     nb:= b.(NumericExpr)
-					     return NewNumNotEq(na.NExpr,nb.NExpr),nil }
+
+NumComparison <- a:NumExpr "<"  _? b:NumExpr { na,_:= getNumExpr(a)
+	      	 	   	   	     nb,_:= getNumExpr(b)
+	      	 	   	   	     return NewNumLess(na,nb),nil }
+              /  a:NumExpr "<=" _? b:NumExpr { na,_:= getNumExpr(a)
+	      	 	   	   	     nb,_:= getNumExpr(b)
+					     return NewNumLessEq(na,nb),nil }
+              /  a:NumExpr "="  _? b:NumExpr { na,_:= getNumExpr(a)
+	      	 	   	   	     nb,_:= getNumExpr(b)
+					     return NewNumEq(na,nb),nil }
+              /  a:NumExpr ">"  _? b:NumExpr { na,_:= getNumExpr(a)
+	      	 	   	   	     nb,_:= getNumExpr(b)
+					     return NewNumGreater(na,nb),nil }
+              /  a:NumExpr ">=" _? b:NumExpr { na,_:= getNumExpr(a)
+	      	 	   	   	     nb,_:= getNumExpr(b)
+					     return NewNumGreaterEq(na,nb),nil }
+	      /	 a:NumExpr "!=" _? b:NumExpr { na,_:= getNumExpr(a)
+	      	 	   	   	     nb,_:= getNumExpr(b)
+					     return NewNumNotEq(na,nb),nil }
 
 /*Numeric expressions*/
 NumExpr  <- a:Mults b:(Plus*) {
 	     exprs := ToSlice(b) // common.ToSlice(b)
 	     if len(exprs)==0 {
-	        return a,nil
+	     //fmt.Printf("NumExpr of an Atom: %s\n", a)
+	     	v,ok := getNumExpr(a)
+		if ok == nil {
+	           return NumExprToExpr(v),nil //old: NumExprToExpr(a.(NumExpr)),nil lm: NumExprToExpr(getNumExpr(a))
+		} else {
+		  return nil, errors.New("NumExpr: Mults expression is not numeric\n")
+		}
 	     } else {
 	       return Flatten(a,b),nil // common.Flatten(a,b)
 	     }
@@ -123,11 +130,21 @@ Mults    <- a:BasicNumExpr b:(MoreMults*) {
 	     return Flatten(a,b),nil // common.Flatten(a,b)
           }
 	  
-MoreMults <- '*' _? e:BasicNumExpr { return NewRightMultExpr(e),nil } // common. NewRightMultExpr(e)
-          /  '/' _? e:BasicNumExpr { return NewRightDivExpr(e),nil }
+MoreMults <- '*' _? e:BasicNumExpr { v, ok := getNumExpr(e)
+	     	    		     if ok == nil{
+	     	    		     	   return NewRightMultExpr(v),nil // common. NewRightMultExpr(e)
+					   } else {
+					   return nil, errors.New("MoreMults: BasicNumExpr is not numeric")
+				     }}
+          /  '/' _? e:BasicNumExpr { v, ok := getNumExpr(e)
+	     	    		     if ok == nil{
+	     	    		     	return NewRightDivExpr(v),nil // common. NewRightMultExpr(e)
+				     } else {
+				     	   return nil, errors.New("MoreMults: BasicNumExpr is not numeric")
+				     }}
 	  
-BasicNumExpr <- '(' _? n:NumExpr ')' _?   { return n,nil }
-           / a:Atomic { return a,nil }
+BasicNumExpr <- '(' _? n:NumExpr ')' _?   { return n,nil } //old: n lm: getNumExpr(n)
+           / a:Atomic { return a,nil } //return a, nil lm:added getNumExpr(a)
 
 /*Atoms used for every theory(type)*/
 Atomic <- co:Constant		    { return co, nil}
@@ -153,7 +170,7 @@ Args <- e:Expr "," a:Args {
 Constant <- TRUE _?                 { return TrueExpr,nil }
         / FALSE _?                  { return FalseExpr,nil }
 //	/ k:ConstExpr               { return NewConstExpr(k),nil } // constant uses are treated syntactically as stream names
-        / l:NumLiteral _?           { return NewNumericExpr(l),nil }
+        / l:NumLiteral _?           { return l,nil } //old:NewNumericExpr(l),nil this returns an NumericExpr which is an Expr, but in the general case the Numliteral will be in a NumExpr
 
 ConstExpr <- n:Name { return n,nil } 
 
