@@ -235,6 +235,10 @@ func getNumExpr(e interface{}) (NumExpr, error) {
 		return v, nil
 	case NumExpr:
 		return v, nil
+	case FloatLiteralExpr:
+		return v, nil
+	case IntLiteralExpr:
+		return v, nil
 	default:
 		str := fmt.Sprintf("cannot convert to num \"%s\"\n", e.(Expr).Sprint())
 		return nil, errors.New(str)

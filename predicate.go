@@ -67,14 +67,37 @@ func BooleanExprToExpr(p BooleanExpr) Expr {
 }
 
 func getBoolExpr(e interface{}) (BooleanExpr, error) {
-	if v, ok := e.(BoolExpr); ok {
+	//	fmt.Printf("Converting %s to bool\n", e)
+	/*if v, ok := e.(BoolExpr); ok {
+		fmt.Printf("Is BoolExpr \n", e)
 		return v.BExpr, nil
 	} else if v, ok := e.(StreamOffsetExpr); ok {
+		fmt.Printf("Is Stream \n", e)
 		return v, nil
 	} else if k, ok := e.(ConstExpr); ok {
+		fmt.Printf("Is ConstExpr \n", e)
 		return k, nil
 	} else {
+		fmt.Printf("Is error \n", e)
 		str := fmt.Sprintf("cannot convert to bool \"%s\"\n", e.(Expr).Sprint())
+		return nil, errors.New(str)
+	}*/
+	switch v := e.(type) {
+	case BoolExpr:
+		return v.BExpr, nil
+	case StreamOffsetExpr:
+		return v, nil
+	case ConstExpr:
+		return v, nil
+	case BooleanExpr:
+		return v, nil
+	case TruePredicate:
+		return v, nil
+	case FalsePredicate:
+		return v, nil
+	default:
+		//		fmt.Printf("Is error \n", e)
+		str := fmt.Sprintf("cannot convert to bool \"%s\"\n", e.(Expr).Sprint()) //here v has type interface{}
 		return nil, errors.New(str)
 	}
 }
