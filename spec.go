@@ -137,6 +137,7 @@ func ProcessDeclarations(ds []interface{}) (*Spec, error) {
 				str := fmt.Sprintf("%s redeclared", name)
 				return nil, errors.New(str)
 			}
+			in_progress.Output[name] = OutputDecl{name, decl.Type, decl.Pos} //the sentence output num a = 2 will combine output declaration and definition, it is intrinsically declared by this line
 			in_progress.Define[name] = decl
 		default:
 			str := fmt.Sprint("Unexpected type returned by parser: %t", v)
@@ -206,6 +207,68 @@ func ProcessDeclarations(ds []interface{}) (*Spec, error) {
 	return spec, nil
 }
 
+/*Auxiliary functions and methods for all the functions that operate on a Spec*/
+func (c ConstDecl) Sprint() string {
+	return fmt.Sprintf("ConstDecl: {Name = %s, Type = %s, expr = %s}\n", c.Name.Sprint(), c.Type.Sprint(), c.Val.Sprint())
+}
+
+func (i InputDecl) Sprint() string {
+	return fmt.Sprintf("InputDecl: {Name = %s, Type = %s}\n", i.Name.Sprint(), i.Type.Sprint())
+}
+
+func (o OutputDecl) Sprint() string {
+	return fmt.Sprintf("OutputDecl: {Name = %s, Type = %s}\n", o.Name.Sprint(), o.Type.Sprint())
+}
+
+func (o OutputDefinition) Sprint() string {
+	return fmt.Sprintf("OutputDefinition: {Name = %s, Type = %s, expr = %s}\n", o.Name.Sprint(), o.Type.Sprint(), o.Expr.Sprint())
+}
+
+/*Pretty Print using method Accept*/
+func (c ConstDecl) PrettyPrint() string {
+	v := PrettyPrinterVisitor{0, ""}
+	c.Val.Accept(&v)
+	return fmt.Sprintf("ConstDecl: {Name = %s, Type = %s, expr = %s}\n", c.Name.Sprint(), c.Type.Sprint(), v.s)
+}
+
+func (i InputDecl) PrettyPrint() string {
+	return fmt.Sprintf("InputDecl: {Name = %s, Type = %s}\n", i.Name.Sprint(), i.Type.Sprint())
+}
+
+func (o OutputDecl) PrettyPrint() string {
+	return fmt.Sprintf("OutputDecl: {Name = %s, Type = %s}\n", o.Name.Sprint(), o.Type.Sprint())
+}
+
+func (o OutputDefinition) PrettyPrint() string {
+	v := PrettyPrinterVisitor{0, ""}
+	o.Expr.Accept(&v)
+	return fmt.Sprintf("OutputDefinition: {Name = %s, Type = %s, expr = \n%s}\n", o.Name.Sprint(), o.Type.Sprint(), v.s)
+}
+
+func (o OutputStream) PrettyPrint() string {
+	v := PrettyPrinterVisitor{0, ""}
+	o.Expr.Accept(&v)
+	return fmt.Sprintf("OutputStream: {Name = %s, Type = %s, expr = \n%s}\n", o.Name.Sprint(), o.Type.Sprint(), v.s)
+}
+
+/*Type checking using method Accept*/
+/*func (c ConstDecl) CheckType() string {
+
+}
+
+func (i InputDecl) CheckType() string {
+
+}
+
+func (o OutputDecl) CheckType() string {
+
+}
+
+func (o OutputDefinition) CheckType() string {
+
+}
+*/
+
 var Verbose bool = false
 
 func Sprint(spec Spec) string {
@@ -227,5 +290,81 @@ func Sprint(spec Spec) string {
 		str = str + fmt.Sprintf("define %s %s := %s\n", v.Type.Sprint(), v.Name, v.Expr.Sprint())
 	}
 	return str
+
+}
+
+func PrintAst(spec *Spec, prefix string) {
+	fmt.Printf(prefix + Sprint(*spec))
+}
+
+func PrettyPrintAst(spec *Spec, prefix string) string {
+	/*for _, val := range ast {
+		switch v := val.(type) {
+		/*	case dLola.Spec:
+			fmt.Printf(prefix+"AST spec %s\n", v.Sprint())
+		case ConstDecl:
+			fmt.Printf(prefix+"%s\n", v.PrettyPrint())
+		case InputDecl:
+			fmt.Printf(prefix+"%s\n", v.PrettyPrint())
+		case OutputDecl:
+			fmt.Printf(prefix+"%s\n", v.PrettyPrint())
+		case OutputDefinition:
+			fmt.Printf(prefix+"%s\n", v.PrettyPrint())
+		}
+	}*/
+	var str string
+	for _, v := range spec.Const {
+		str = str + v.PrettyPrint()
+	}
+	for _, v := range spec.Input {
+		str = str + v.PrettyPrint()
+	}
+	for _, v := range spec.Output {
+		//str = str + fmt.Sprintf("output %s %s\n", v.Type.Sprint(), v.Name)
+		//lm: not needed str = str + fmt.Sprintf("ticks %s := %s\n", v.Name, v.Ticks.Sprint())
+		str = str + v.PrettyPrint()
+		//fmt.Sprintf("define %s %s := %s\n", v.Type.Sprint(), v.Name, v.Expr.PrettyPrint())
+	}
+	return str
+}
+
+func CheckTypesAst(spec *Spec, prefix string) {
+	typeVisitor := TypeVisitor{make(map[StreamName]StreamType), make([]string, 0), Unknown}
+
+	for _, v := range spec.Const {
+		//TODO: mark the typeVisitor to detect references to other streams in order to raise an error (this is a constant)
+		v.Val.Accept(&typeVisitor)
+		typeVisitor.symTab[v.Name] = v.Type //introduce constant names as declared for the TypeVisitor
+	}
+	for _, v := range spec.Input {
+		//introduce all the input streams as declared so when they are used TypeVisitor can know if they were declared
+		typeVisitor.symTab[v.Name] = v.Type
+	}
+
+	for _, v := range spec.Output {
+		//we mark the type that the overall expression must have, the declared type of the output stream
+		typeVisitor.symTab[v.Name] = v.Type //output streams must be declared in order to be used by other output streams
+		typeVisitor.reqType = v.Type
+		v.Expr.Accept(&typeVisitor)
+	}
+
+	for _, e := range typeVisitor.errors {
+		fmt.Printf(prefix+"Error %s\n", e)
+	}
+	/*for _, val := range ast {
+		switch v := val.(type) {
+		/*	case dLola.Spec:
+			fmt.Printf(prefix+"AST spec %s\n", v.Sprint())
+		case ConstDecl:
+			//v.Expr.Accept(&typeVisitor)
+		case InputDecl:
+			//v.Expr.Accept(&typeVisitor)
+		case OutputDecl:
+			//v.Expr.Accept(&typeVisitor)
+		case OutputDefinition:
+			v.Expr.Accept(&typeVisitor)
+
+		}
+	}*/
 
 }

@@ -6,26 +6,37 @@ import (
 )
 
 type TypeVisitor struct { //implements ExprVisitor, BooleanExprVisitor, NumExprVisitor, NumComparisonVisitor and StreamExprVisitor
-	symTab  map[StreamName]int //symbol table containing the declared variables and their type, StreamName is just string
-	errors  []string           //list of all the errors found
-	reqType int                //requested type for the subexpressions 0:Bool, 1:Num
+	symTab  map[StreamName]StreamType //symbol table containing the declared variables and their type, StreamName is just string
+	errors  []string                  //list of all the errors found
+	reqType StreamType                //requested type for the subexpressions /*IMPORTANT the types used here will be StreamType, in ast.go , see the constants below the type definition!!!
 }
-
-var (
-	boool int = 0
-	num   int = 1
-)
 
 func (v *TypeVisitor) VisitConstExpr(c ConstExpr) {
-
+	constType, ok := v.symTab[c.Name]
+	if !ok {
+		s := fmt.Sprintf("Line %d(%d): Constant %s has not been declared", c.Name)
+		v.errors = append(v.errors, s)
+	} else {
+		if v.reqType != constType {
+			s := fmt.Sprintf("Line %d(%d): Cannot use constant %s of type %s in a %s expression", c.Name, constType.Sprint(), v.reqType.Sprint())
+			v.errors = append(v.errors, s)
+		}
+	}
 }
 
-/*func (v *TypeVisitor) VisitLetExpr(l LetExpr) {
+func (v *TypeVisitor) VisitLetExpr(l LetExpr) {
+	//TODO maybe resolve the syntactic sugar substituting the variables in the expression, and then theck types normally(limitation: in a body that uses the same variable repeatedly, it will be computed more than once) e.g. input num v; let a = 3*v in a + a + a
+	//TODO for the bindings type inference of the expression to know the type of the variable, and check there are no other streams with the same name
+	//TODO for the body its type must match the type of the output stream
 
-}*/
+}
 
 func (v *TypeVisitor) VisitIfThenElseExpr(ite IfThenElseExpr) {
 	checkTypeIf(v, ite)
+}
+
+func (v *TypeVisitor) VisitStringExpr(s StringExpr) {
+	s.StExpr.AcceptStr(v)
 }
 
 func (v *TypeVisitor) VisitStreamOffsetExpr(s StreamOffsetExpr) {
@@ -42,19 +53,19 @@ func (v *TypeVisitor) VisitNumericExpr(n NumericExpr) {
 
 /*BoolExprVisitor methods*/
 func (v *TypeVisitor) VisitTruePredicate(t TruePredicate) {
-	if v.reqType != boool {
-		s := fmt.Sprintf("Line X: Cannot use True in a non-boolean expression")
+	if v.reqType != BoolT {
+		s := fmt.Sprintf("Line %d(%d): Cannot use True in a non-boolean expression", t.Pos.Line, t.Pos.Col)
 		v.errors = append(v.errors, s)
 	}
 }
 func (v *TypeVisitor) VisitFalsePredicate(f FalsePredicate) {
-	if v.reqType != boool {
-		s := fmt.Sprintf("Line X: Cannot use False in a non-boolean expression")
+	if v.reqType != BoolT {
+		s := fmt.Sprintf("Line %d(%d): Cannot use False in a non-boolean expression", f.Pos.Line, f.Pos.Col)
 		v.errors = append(v.errors, s)
 	}
 }
 func (v *TypeVisitor) VisitNotPredicate(n NotPredicate) {
-	v.reqType = boool
+	v.reqType = BoolT
 	n.Inner.AcceptBool(v)
 }
 func (v *TypeVisitor) VisitAndPredicate(a AndPredicate) {
@@ -94,19 +105,17 @@ func (v *TypeVisitor) VisitNumNotEq(e NumNotEq) {
 
 /*NumExprVisitor methods*/
 func (v *TypeVisitor) VisitIntLiteralExpr(i IntLiteralExpr) {
-	if v.reqType != boool {
-		s := fmt.Sprintf("Line X: Cannot use Int Literal in a non-numeric expression")
+	if v.reqType != NumT {
+		s := fmt.Sprintf("Line %d(%d): Cannot use Int Literal in a non-numeric expression", i.Pos.Line, i.Pos.Col)
 		v.errors = append(v.errors, s)
 	}
-
 }
 
 func (v *TypeVisitor) VisitFloatLiteralExpr(f FloatLiteralExpr) {
-	if v.reqType != boool {
-		s := fmt.Sprintf("Line X: Cannot use Float Literal in a non-numeric expression")
+	if v.reqType != NumT {
+		s := fmt.Sprintf("Line %d(%d): Cannot use Float Literal in a non-numeric expression", f.Pos.Line, f.Pos.Col)
 		v.errors = append(v.errors, s)
 	}
-
 }
 
 func (v *TypeVisitor) VisitNumMulExpr(e NumMulExpr) {
@@ -131,47 +140,104 @@ func (v *TypeVisitor) VisitNumMinusExpr(e NumMinusExpr) {
 func (v *TypeVisitor) VisitStreamFetchExpr(s StreamFetchExpr) {
 	streamname := s.Name
 	streamoffset := s.Offset
-	if _, err := streamoffset.(FloatLiteralExpr); err {
-		err := fmt.Sprintf("line X: Stream %s cannot have a non integer offset ", streamname)
+	streamdef := s.Default
+	if _, ok := streamoffset.(FloatLiteralExpr); ok { //streamoffset is a float
+		err := fmt.Sprintf("Line %d(%d): Stream %s cannot have a non integer offset ", s.Pos.Line, s.Pos.Col, streamname)
 		v.errors = append(v.errors, err)
 	}
 
-	elem, ok := v.symTab[streamname]
-	if ok && elem != v.reqType { //declared and types match
-
-	}
-	if ok { //declared but types do not match
-		err := fmt.Sprintf("line X: Stream %s is of type %s but it is required to have type %s", streamname, intToType(elem), intToType(v.reqType))
+	streamtype, ok := v.symTab[streamname]
+	if !ok { //not declared
+		err := fmt.Sprintf("Line %d(%d): Stream %s not declared", s.Pos.Line, s.Pos.Col, streamname)
 		v.errors = append(v.errors, err)
-
-	} else { //not declared
-		err := fmt.Sprintf("line X: Stream %s not declared in line X", streamname)
-		v.errors = append(v.errors, err)
+	} else { //declared
+		if streamdef.typp == Unknown { //offset = 0
+			if streamtype != v.reqType {
+				err := fmt.Sprintf("line %d(%d): Stream %s is of type %s but it is required to have type %s", s.Pos.Line, s.Pos.Col, streamname, streamtype.Sprint(), v.reqType.Sprint())
+				v.errors = append(v.errors, err)
+			}
+		} else { //offset != 0
+			if streamtype != v.reqType || streamtype != streamdef.typp {
+				err := fmt.Sprintf("line %d(%d): Stream %s is of type %s, it is required to have type %s, but its default value has type %s",
+					s.Pos.Line, s.Pos.Col, streamname, streamtype.Sprint(), v.reqType.Sprint(), streamdef.typp.Sprint())
+				v.errors = append(v.errors, err)
+			}
+		}
 	}
-
 }
 
 /*END StreamExprVisitor methods*/
 
+/*StrExprVisitor methods: strings*/
+
+func (v *TypeVisitor) VisitStringLiteralExpr(s StringLiteralExpr) {
+	if v.reqType != StringT {
+		s := fmt.Sprintf("Line %d(%d): Cannot use a StringLiteral in a non-string expression", s.Pos.Line, s.Pos.Col)
+		v.errors = append(v.errors, s)
+	}
+}
+
+func (v *TypeVisitor) VisitStrConcatExpr(s StrConcatExpr) {
+	checkTypeStrOp(v, s.Left, s.Right)
+}
+
+func (v *TypeVisitor) VisitStrEqExpr(s StrEqExpr) {
+	checkTypeStrOp(v, s.Left, s.Right)
+}
+
+/*END StrExprVisitor methods*/
+
 /*Not exported functions*/
 func checkTypeNumOp(v *TypeVisitor, left NumExpr, right NumExpr) {
-	v.reqType = num
+	v.reqType = NumT
 	left.AcceptNum(v)  //will check the left expression
 	right.AcceptNum(v) //will check the right expression
 }
 
 func checkTypeBoolOp(v *TypeVisitor, left BooleanExpr, right BooleanExpr) {
-	v.reqType = boool
+	v.reqType = BoolT
 	left.AcceptBool(v)  //will check the left expression
 	right.AcceptBool(v) //will check the right expression
 }
 
 func checkTypeIf(v *TypeVisitor, ite IfThenElseExpr) {
-	v.reqType = boool
-	ite.If.Accept(v)   //will check the left expression
-	ite.Then.Accept(v) //will check the right expression
-	ite.Else.Accept(v) //will check the right expression
+	outputType := v.reqType // type of the stream, set in spec.go before calling Accept
+	v.reqType = BoolT
+	ite.If.Accept(v)       //will check the left expression
+	v.reqType = outputType //v.getStreamType(ite.Then)
+	ite.Then.Accept(v)     //will check the right expression
+	v.reqType = outputType // v.getStreamType(ite.Then) //so the Accept on the Else branch will check if it returns the same type as the Then branch
+	ite.Else.Accept(v)     //will check the right expression
 }
+
+func checkTypeStrOp(v *TypeVisitor, left StrExpr, right StrExpr) {
+	v.reqType = StringT
+	left.AcceptStr(v)  //will check the left expression
+	right.AcceptStr(v) //will check the right expression
+}
+
+/*IMPORTANT: this function is intended ONLY for INHERITED ATTRIBUTES
+for example for checking that both branches of the IfThenElse have the same type*/
+/*func (v *TypeVisitor) getStreamType(e Expr) StreamType {
+	switch val := e.(type) {
+	case ConstExpr:
+		return v.symTab[val.Name]
+	case StreamOffsetExpr:
+		return v.symTab[val.SExpr.(StreamFetchExpr).Name]
+	case IfThenElseExpr:
+		return v.getStreamType(val.Then)
+	case LetExpr:
+		return v.getStreamType(val.Body)
+	case StringExpr:
+		return StringT
+	case NumericExpr:
+		return NumT
+	case BoolExpr:
+		return BoolT
+	default:
+		return Unknown
+	}
+}*/
 
 /*func prettyLet(v *TypeVisitor, l LetExpr) {
 	l.Bind.Accept(v) //will check the right expression
@@ -179,16 +245,45 @@ func checkTypeIf(v *TypeVisitor, ite IfThenElseExpr) {
 }
 */
 
-func intToType(i int) string {
+/*func intToType(i int) string {
 	switch i {
-	case boool:
-		return "bool"
+	case NumT:
+		return "num"
 	case num:
 		return "num"
 	default:
 		return "Unknown type"
 	}
 
-}
+}*/
+
+/*See ast.go type StreamType and the constants below*/
+/*func typeToInt(t StreamType) int {
+	switch t {
+	case "bool":
+		return 0
+	case "num":
+		return 1
+	default:
+		return 3
+	}
+
+}*/
 
 /*END Not exported functions*/
+
+/*VisitStreamFetch*/
+/*
+	if ok && streamtype == v.reqType && streamtype == streamdef.typp { //declared and types match with superexpression and the default value
+
+	} else {
+		if ok { //declared but types do not match
+			err := fmt.Sprintf("line %d(%d): Stream %s is of type %s but it is required to have type %s, and its default value has type %s", streamname, streamtype.Sprint(), v.reqType.Sprint(), streamdef.typp.Sprint())
+			v.errors = append(v.errors, err)
+
+		} else { //not declared
+			err := fmt.Sprintf("line %d(%d): Stream %s not declared", streamname)
+			v.errors = append(v.errors, err)
+		}
+	}
+*/

@@ -1,7 +1,7 @@
 package dLola
 
 import (
-	"fmt"
+	//	"fmt"
 	"strings"
 )
 
@@ -14,28 +14,34 @@ type PrettyPrinterVisitor struct { //implements ExprVisitor, BooleanExprVisitor,
 
 /*ExprVisitor methods*/
 func (v *PrettyPrinterVisitor) VisitConstExpr(c ConstExpr) {
-	v.s += c.Sprint()
+	v.s += c.Sprint() + "\n"
 }
 
-/*func (v *PrettyPrinterVisitor) VisitLetExpr(l LetExpr) {
+func (v *PrettyPrinterVisitor) VisitLetExpr(l LetExpr) {
 	prettyLet(v, l)
-}*/
+}
 
 func (v *PrettyPrinterVisitor) VisitIfThenElseExpr(ite IfThenElseExpr) {
 	prettyIf(v, ite)
 }
 
+func (v *PrettyPrinterVisitor) VisitStringExpr(s StringExpr) {
+
+}
+
 func (v *PrettyPrinterVisitor) VisitStreamOffsetExpr(s StreamOffsetExpr) {
-	v.s += s.Sprint()
+	v.s += s.Sprint() + "\n"
 }
 
 func (v *PrettyPrinterVisitor) VisitBoolExpr(b BoolExpr) {
-	v.s += "BoolExpr\n"
+	tabsNow := strings.Repeat("\t", v.layer)
+	v.s += "BoolExpr\n" + tabsNow
 	b.BExpr.AcceptBool(v)
 }
 
 func (v *PrettyPrinterVisitor) VisitNumericExpr(n NumericExpr) {
-	v.s += "NumericExpr\n"
+	tabsNow := strings.Repeat("\t", v.layer)
+	v.s += "NumericExpr\n" + tabsNow
 	n.NExpr.AcceptNum(v)
 }
 
@@ -43,10 +49,10 @@ func (v *PrettyPrinterVisitor) VisitNumericExpr(n NumericExpr) {
 
 /*BoolExprVisitor methods*/
 func (v *PrettyPrinterVisitor) VisitTruePredicate(t TruePredicate) {
-	v.s += "True"
+	v.s += "True\n"
 }
 func (v *PrettyPrinterVisitor) VisitFalsePredicate(f FalsePredicate) {
-	v.s += "False"
+	v.s += "False\n"
 }
 func (v *PrettyPrinterVisitor) VisitNotPredicate(n NotPredicate) {
 	v.s += "Not "
@@ -89,11 +95,11 @@ func (v *PrettyPrinterVisitor) VisitNumNotEq(e NumNotEq) {
 
 /*NumExprVisitor methods*/
 func (v *PrettyPrinterVisitor) VisitIntLiteralExpr(i IntLiteralExpr) {
-	v.s += string(i.Num)
+	v.s += i.Sprint() + "\n"
 }
 
 func (v *PrettyPrinterVisitor) VisitFloatLiteralExpr(f FloatLiteralExpr) {
-	v.s += fmt.Sprintf("%f", f.Num)
+	v.s += f.Sprint() + "\n"
 }
 
 func (v *PrettyPrinterVisitor) VisitNumMulExpr(e NumMulExpr) {
@@ -114,15 +120,38 @@ func (v *PrettyPrinterVisitor) VisitNumMinusExpr(e NumMinusExpr) {
 
 /*END NumExprVisitor methods*/
 
+/*StreamExprVisitor methods*/
+func (v *PrettyPrinterVisitor) VisitStreamFetchExpr(s StreamFetchExpr) {
+	//not needed for PrettyPrinter
+}
+
+/*END StreamExprVisitor methods*/
+
+/*StrExprVisitor methods: strings*/
+
+func (v *PrettyPrinterVisitor) VisitStringLiteralExpr(s StringLiteralExpr) {
+	v.s += s.Sprint()
+}
+
+func (v *PrettyPrinterVisitor) VisitStrConcatExpr(s StrConcatExpr) {
+	prettyStrOp(v, "StrConcat", s.Left, s.Right)
+}
+
+func (v *PrettyPrinterVisitor) VisitStrEqExpr(s StrEqExpr) {
+	prettyStrOp(v, "StrEq", s.Left, s.Right)
+}
+
+/*END StrExprVisitor methods*/
+
 func prettyNumOp(v *PrettyPrinterVisitor, op string, left NumExpr, right NumExpr) {
 	tabsNow := strings.Repeat("\t", v.layer)
 	tabs := tabsNow + "\t"
-	v.layer++ //NEXT LAYER
-	v.s += op + "{\n" + tabs
-	left.AcceptNum(v) //will append the left expression string
-	v.s += "\n" + tabs
+	v.layer++                //NEXT LAYER
+	v.s += op + "{\n" + tabs //higher layers put the correct indentation of lower layers
+	left.AcceptNum(v)        //will append the left expression string
+	v.s += tabs
 	right.AcceptNum(v) //will append the right expression string
-	v.s += "\n" + tabsNow + "}\n"
+	v.s += tabsNow + "}\n"
 	v.layer-- //NOW LAYER
 }
 
@@ -132,9 +161,9 @@ func prettyBoolOp(v *PrettyPrinterVisitor, op string, left BooleanExpr, right Bo
 	v.layer++ //NEXT LAYER
 	v.s += op + "{\n" + tabs
 	left.AcceptBool(v) //will append the left expression string
-	v.s += "\n" + tabs
+	v.s += tabs
 	right.AcceptBool(v) //will append the right expression string
-	v.s += "\n" + tabsNow + "}\n"
+	v.s += tabsNow + "}\n"
 	v.layer-- //NOW LAYER
 }
 
@@ -152,7 +181,7 @@ func prettyIf(v *PrettyPrinterVisitor, ite IfThenElseExpr) {
 	v.layer-- //NOW LAYER
 }
 
-/*func prettyLet(v *PrettyPrinterVisitor, l LetExpr) {
+func prettyLet(v *PrettyPrinterVisitor, l LetExpr) {
 	tabsNow := strings.Repeat("\t", v.layer)
 	tabs := tabsNow + "\t"
 	v.layer++ //NEXT LAYER
@@ -163,4 +192,15 @@ func prettyIf(v *PrettyPrinterVisitor, ite IfThenElseExpr) {
 	v.s += "\n}" + tabs + "}\n"
 	v.layer-- //NOW LAYER
 }
-*/
+
+func prettyStrOp(v *PrettyPrinterVisitor, op string, left StrExpr, right StrExpr) {
+	tabsNow := strings.Repeat("\t", v.layer)
+	tabs := tabsNow + "\t"
+	v.layer++                //NEXT LAYER
+	v.s += op + "{\n" + tabs //higher layers put the correct indentation of lower layers
+	left.AcceptStr(v)        //will append the left expression string
+	v.s += tabs
+	right.AcceptStr(v) //will append the right expression string
+	v.s += tabsNow + "}\n"
+	v.layer-- //NOW LAYER
+}

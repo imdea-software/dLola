@@ -15,12 +15,16 @@ func (v *EmptyVisitor) VisitConstExpr(c ConstExpr) {
 
 }
 
-/*func (v *EmptyVisitor) VisitLetExpr(l LetExpr) {
+func (v *EmptyVisitor) VisitLetExpr(l LetExpr) {
 
-}*/
+}
 
 func (v *EmptyVisitor) VisitIfThenElseExpr(ite IfThenElseExpr) {
 	emptyIf(v, ite)
+}
+
+func (v *EmptyVisitor) VisitStringExpr(s StringExpr) {
+
 }
 
 func (v *EmptyVisitor) VisitStreamOffsetExpr(s StreamOffsetExpr) {

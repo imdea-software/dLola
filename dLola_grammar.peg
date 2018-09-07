@@ -13,7 +13,7 @@ Input  <- _? d:(Declaration*)  EOF {
        return d,nil
        }
 
-Declaration <- com:Comment
+Declaration <- com:Comment {return com, nil } 
  	    / i:InputStreamDecl   { return i,nil }
 	    / k:Const              { return k,nil }
 //	    / o:OutputStreamDecl       { return o,nil }
@@ -22,18 +22,15 @@ Declaration <- com:Comment
 Const <- CONST t:Type n:Name ASSIGN e:Expr { 
       // if !checkGround(e) { return nil,err }
       fmt.Sprintf("")
-      return NewConstDecl(n,t,e),nil 
+      return NewConstDecl(n,t,e,c.pos),nil //c.pos is a struct defined in parser.go (once generated) containing line, col and offset
 }
 
 InputStreamDecl <- INPUT t:Type n:Name {
-    return NewInputDecl(n,t),nil
+    return NewInputDecl(n,t, c.pos),nil
 }
 
 OutputDefinition <- d:DefOut t:Type n:Name _? ASSIGN e:Block {
-		 if d == "output"{
-		    NewOutputDecl(n,t) //TODO:store it
-		 }
-    return NewOutputDefinition(n,t,e),nil
+    return NewOutputDefinition(n,t,e, c.pos),nil
 }
 
 DefOut <- DEFINE / OUTPUT{
@@ -44,8 +41,8 @@ DefOut <- DEFINE / OUTPUT{
     return NewOutputDecl(n,t),nil	  
 }*/
 
-Block <- // LET n:Name ASSIGN e:Expr IN b:Block _? { return NewLetExpr(n,e,b),nil }
-       e:Expr                                  { return e,nil }
+Block <- LET n:Name ASSIGN e:Expr IN b:Block _? { return NewLetExpr(n,e,b),nil }
+       / e:Expr                                  { return e,nil }
 
 Expr <- IF p:BooleanExpr THEN a:Expr ELSE b:Expr { return NewIfThenElseExpr(p,a,b),nil }
      / b:BooleanExpr { return b,nil }
@@ -167,11 +164,10 @@ AtomicNum <-  e:StreamExpr              { return NewStreamOffsetExpr(e),nil }
        	      / co:ConstNum		    { return co, nil}
 
 /*Streams are generic*/
-StreamExpr <- n:Name "["  _? t:OffsetExpr _? "|" _? Constant _? "]" _? { return NewStreamFetchExpr(n,t),nil }
-	      / n:Name { return NewStreamFetchExpr(n,NewIntLiteralExpr(0)), nil } 
+StreamExpr <- n:Name "["  _? t:OffsetExpr _? "|" _? co:Constant _? "]" _? { return NewStreamFetchExpr(n,t,co, c.pos),nil }
+	      / n:Name { return NewStreamFetchExpr(n,NewIntLiteralExpr(0, c.pos), nil, c.pos), nil } 
 
-OffsetExpr <- "+" n:NumLiteral {return n, nil}
-	      / "-" n:NumLiteral {return n, nil}
+OffsetExpr <- n:NumLiteral {return n, nil}
 
 /*Every constant of every type, only accesible from StreamExpr as a default value!!!*/
 Constant <- b:ConstBool {return b,nil}
@@ -179,22 +175,22 @@ Constant <- b:ConstBool {return b,nil}
 //	/ k:ConstExpr               { return NewConstExpr(k),nil } // constant uses are treated syntactically as stream names
 
 /*Constants for each type*/
-ConstBool <- TRUE _?                 { return TrueExpr,nil }
-           / FALSE _?                  { return FalseExpr,nil }
+ConstBool <- TRUE _?                 { return NewTruePredicate(c.pos),nil } //old:TrueExpr{c.pos},nil lm:
+           / FALSE _?                  { return NewFalsePredicate(c.pos),nil }
 	   
 ConstNum <- l:NumLiteral _?           { return l,nil } //old:NewNumericExpr(l),nil this returns an NumericExpr which is an Expr, but in the general case the Numliteral will be in a NumExpr
 
 ConstExpr <- n:Name { return n,nil } 
 
 
-NumLiteral <- p:([0-9]+('.'[0-9]+)?) {
+NumLiteral <- p:(('-')?[0-9]+('.'[0-9]+)?) {
 	      if strings.Contains(string(c.text), ".") {
 //	      	 x,err := strconv.ParseFloat(p.(string),32)
 		 x,err := strconv.ParseFloat(string(c.text),32)
-	      	 return NewFloatLiteralExpr(x), err
+	      	 return NewFloatLiteralExpr(x, c.pos), err
 	      } else {
 	      	 x,err := strconv.ParseInt(string(c.text),10,32)
-	      	 return NewIntLiteralExpr(x), err
+	      	 return NewIntLiteralExpr(int(x), c.pos), err
 	      }
 	      
 	   }
@@ -231,8 +227,8 @@ _ "whitespace" <- [ \t\n\r]+
 //EOL     <- _? Comment? ("\r\n" / "\n\r" / "\r" / "\n" / EOF)
 EOL     <- ("\r\n" / "\n\r" / "\r" / "\n")
 
-Comment <- "//" [^\r\n]* [\r\n] {return "//",nil }
-
+Comment <- "//" [^\r\n]* [\r\n] {return "",nil }
+	/ "/*" [^"*/"]* "*/" {return "", nil}
 EOF     <- !.
 
 //

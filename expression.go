@@ -27,9 +27,9 @@ type Expr interface {
 }
 type ExprVisitor interface {
 	VisitConstExpr(ConstExpr)
-	//	VisitLetExpr(LetExpr)
+	VisitLetExpr(LetExpr)
 	VisitIfThenElseExpr(IfThenElseExpr)
-	// VisitStringExpr(StringExpr)
+	VisitStringExpr(StringExpr)
 	VisitStreamOffsetExpr(StreamOffsetExpr)
 	VisitBoolExpr(BoolExpr)
 	VisitNumericExpr(NumericExpr)
@@ -44,11 +44,11 @@ type ConstExpr struct { // implements Expr,NumExpr,BoolExpr
 	Name StreamName
 }
 
-/*type LetExpr struct {
+type LetExpr struct {
 	Name StreamName
 	Bind Expr
 	Body Expr
-}*/
+}
 type IfThenElseExpr struct { // implements Expr,NumExpr,BoolExpr
 	If   Expr
 	Then Expr
@@ -63,6 +63,9 @@ type BoolExpr struct {
 type NumericExpr struct {
 	NExpr NumExpr
 }
+type StringExpr struct {
+	StExpr StrExpr
+}
 
 /*striver
 type TimeExpr struct {
@@ -76,9 +79,9 @@ func (this ConstExpr) Accept(visitor ExprVisitor) {
 	visitor.VisitConstExpr(this)
 }
 
-/*func (this LetExpr) Accept(visitor ExprVisitor) {
+func (this LetExpr) Accept(visitor ExprVisitor) {
 	visitor.VisitLetExpr(this)
-}*/
+}
 func (this IfThenElseExpr) Accept(visitor ExprVisitor) {
 	visitor.VisitIfThenElseExpr(this)
 }
@@ -90,6 +93,9 @@ func (this BoolExpr) Accept(visitor ExprVisitor) {
 }
 func (this NumericExpr) Accept(visitor ExprVisitor) {
 	visitor.VisitNumericExpr(this)
+}
+func (this StringExpr) Accept(visitor ExprVisitor) {
+	visitor.VisitStringExpr(this)
 }
 
 /*striver
@@ -109,11 +115,11 @@ func (this ConstExpr) Sprint() string {
 	return string(this.Name)
 }
 
-/*func (this LetExpr) Sprint() string {
+func (this LetExpr) Sprint() string {
 	bind := this.Bind.Sprint()
 	body := this.Bind.Sprint()
 	return fmt.Sprintf("let %s = %s in %s", this.Name, bind, body)
-}*/
+}
 func (this IfThenElseExpr) Sprint() string {
 	if_part := this.If.Sprint()
 	then_part := this.Then.Sprint()
@@ -128,6 +134,9 @@ func (this StreamOffsetExpr) Sprint() string {
 }
 func (this BoolExpr) Sprint() string {
 	return this.BExpr.Sprint()
+}
+func (this StringExpr) Sprint() string {
+	return this.StExpr.Sprint()
 }
 
 /*striver
@@ -162,10 +171,13 @@ func NewIfThenElseExpr(p, a, b interface{}) IfThenElseExpr {
 	return IfThenElseExpr{p.(Expr), a.(Expr), b.(Expr)}
 }
 
-/*func NewLetExpr(n, e, b interface{}) LetExpr {
+func NewLetExpr(n, e, b interface{}) LetExpr {
 	name := getStreamName(n)
 	return LetExpr{name, e.(Expr), b.(Expr)}
-}*/
+}
+func NewStringExpr(s interface{}) StringExpr {
+	return StringExpr{s.(StrExpr)}
+}
 
 /*striver
 func NewTimeExpr(a interface{}) TimeExpr {
@@ -207,8 +219,10 @@ type SuccValExpr struct { //implements StreamExpr
 	Expr Time
 }*/
 type StreamFetchExpr struct { //implements StreamExpr
-	Name   StreamName
-	Offset OffsetExpr
+	Name    StreamName
+	Offset  OffsetExpr
+	Default DefaultExpr //default value for the instantiated stream that gets out of the trace
+	Pos     Position
 }
 
 /*
@@ -229,10 +243,11 @@ func NewSuccValExpr(s, t interface{}) SuccValExpr {
 	return SuccValExpr{name, t.(Time)}
 }
 */
-func NewStreamFetchExpr(s, t interface{}) StreamFetchExpr {
+func NewStreamFetchExpr(s, t, co, p interface{}) StreamFetchExpr {
 	offset := t.(OffsetExpr)
 	name := getStreamName(s)
-	return StreamFetchExpr{name, offset}
+	def := NewDefaultExpr(co)
+	return StreamFetchExpr{name, offset, def, NewPosition(p)}
 }
 
 /*
@@ -250,7 +265,11 @@ func (e SuccValExpr) Sprint() string {
 }
 */
 func (e StreamFetchExpr) Sprint() string {
-	return fmt.Sprintf("%s[%s]", e.Name.Sprint(), e.Offset.Sprint())
+	if e.Default.typp == Unknown {
+		return fmt.Sprintf("%s[%s]", e.Name.Sprint(), e.Offset.Sprint())
+	} else {
+		return fmt.Sprintf("%s[%s|%s]", e.Name.Sprint(), e.Offset.Sprint(), e.Default.Sprint())
+	}
 }
 
 /*
@@ -320,6 +339,39 @@ func (t Time_t) Sprint() string {
 //
 type OffsetExpr interface { // OffsetExpr "implements" Time
 	Sprint() string
+}
+
+type Printable interface {
+	Sprint() string
+}
+
+type DefaultExpr struct { //implements DefaultExpr
+	typp StreamType //as in TypeVisitor
+	val  Printable
+}
+
+var InvalidVal BoolExpr = BoolExpr{TruePredicate{Position{-1, -1, -1}}} //nil is not allowed
+var InvalidDef = DefaultExpr{Unknown, InvalidVal}
+
+/*co must not be nil*/
+func NewDefaultExpr(co interface{}) DefaultExpr {
+	var t StreamType
+	if co != nil {
+		_, ok := co.(TruePredicate)
+		_, ok2 := co.(FalsePredicate)
+		if ok || ok2 { //it is either True or False
+			t = BoolT
+		} else {
+			t = NumT
+		}
+		return DefaultExpr{t, co.(Printable)}
+	} else {
+		return InvalidDef
+	}
+}
+
+func (d DefaultExpr) Sprint() string {
+	return d.val.Sprint()
 }
 
 /*striver

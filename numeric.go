@@ -133,9 +133,11 @@ type NumExprVisitor interface {
 
 type IntLiteralExpr struct {
 	Num int
+	Pos Position
 }
 type FloatLiteralExpr struct {
 	Num float32
+	Pos Position
 }
 type NumMulExpr struct {
 	Left  NumExpr
@@ -166,12 +168,12 @@ func NewPlusExpr(a, b interface{}) NumPlusExpr {
 func NewMinusExpr(a, b interface{}) NumMinusExpr {
 	return NumMinusExpr{a.(NumExpr), b.(NumExpr)}
 }
-func NewIntLiteralExpr(a interface{}) IntLiteralExpr {
-	return IntLiteralExpr{a.(int)}
+func NewIntLiteralExpr(a, p interface{}) IntLiteralExpr {
+	return IntLiteralExpr{a.(int), NewPosition(p)}
 }
-func NewFloatLiteralExpr(a interface{}) FloatLiteralExpr {
+func NewFloatLiteralExpr(a, p interface{}) FloatLiteralExpr {
 	//	return FloatLiteralExpr{a.(float32)}
-	return FloatLiteralExpr{float32(a.(float64))}
+	return FloatLiteralExpr{float32(a.(float64)), NewPosition(p)}
 }
 
 func (e NumMulExpr) Sprint() string {

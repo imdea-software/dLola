@@ -26,15 +26,15 @@ type BooleanExprVisitor interface {
 	//	VisitTagPredicate(TagPredicate)
 }
 
-var (
+/*var (
 	True      TruePredicate
 	False     FalsePredicate
 	TrueExpr  BoolExpr = BoolExpr{True}
 	FalseExpr BoolExpr = BoolExpr{False}
-)
+)*/
 
-type TruePredicate struct{}
-type FalsePredicate struct{}
+type TruePredicate struct{ Pos Position }
+type FalsePredicate struct{ Pos Position }
 
 type NotPredicate struct {
 	Inner BooleanExpr
@@ -132,6 +132,14 @@ func NewOrPredicate(a, b interface{}) BooleanExpr {
 
 func NewNotPredicate(p interface{}) NotPredicate {
 	return NotPredicate{p.(BooleanExpr)}
+}
+
+func NewTruePredicate(p interface{}) TruePredicate {
+	return TruePredicate{NewPosition(p)}
+}
+
+func NewFalsePredicate(p interface{}) FalsePredicate {
+	return FalsePredicate{NewPosition(p)}
 }
 
 //
