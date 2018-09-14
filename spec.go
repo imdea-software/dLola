@@ -139,6 +139,8 @@ func ProcessDeclarations(ds []interface{}) (*Spec, error) {
 			}
 			in_progress.Output[name] = OutputDecl{name, decl.Type, decl.Pos} //the sentence output num a = 2 will combine output declaration and definition, it is intrinsically declared by this line
 			in_progress.Define[name] = decl
+		case string:
+			//ignore it is a comment
 		default:
 			str := fmt.Sprint("Unexpected type returned by parser: %t", v)
 			return nil, errors.New(str)
@@ -298,20 +300,6 @@ func PrintAst(spec *Spec, prefix string) {
 }
 
 func PrettyPrintAst(spec *Spec, prefix string) string {
-	/*for _, val := range ast {
-		switch v := val.(type) {
-		/*	case dLola.Spec:
-			fmt.Printf(prefix+"AST spec %s\n", v.Sprint())
-		case ConstDecl:
-			fmt.Printf(prefix+"%s\n", v.PrettyPrint())
-		case InputDecl:
-			fmt.Printf(prefix+"%s\n", v.PrettyPrint())
-		case OutputDecl:
-			fmt.Printf(prefix+"%s\n", v.PrettyPrint())
-		case OutputDefinition:
-			fmt.Printf(prefix+"%s\n", v.PrettyPrint())
-		}
-	}*/
 	var str string
 	for _, v := range spec.Const {
 		str = str + v.PrettyPrint()
@@ -329,42 +317,36 @@ func PrettyPrintAst(spec *Spec, prefix string) string {
 }
 
 func CheckTypesAst(spec *Spec, prefix string) {
-	typeVisitor := TypeVisitor{make(map[StreamName]StreamType), make([]string, 0), Unknown}
-
-	for _, v := range spec.Const {
-		//TODO: mark the typeVisitor to detect references to other streams in order to raise an error (this is a constant)
-		v.Val.Accept(&typeVisitor)
+	typeVisitor := TypeVisitor{make(map[StreamName]StreamType), make([]string, 0), Unknown, false}
+	for _, v := range spec.Const { //we do this first because the order in which constants are iterated over is not always the same (using the same file)
 		typeVisitor.symTab[v.Name] = v.Type //introduce constant names as declared for the TypeVisitor
 	}
+	//constants may reference other constants
+	//TODO: referencias a constantes se parsean como streams, cambiar el tipo de datos para que sea adecuado antes del checking de tipos!!!!
+	//mark the typeVisitor to detect references to other streams in order to raise an error (this is a constant)
+	typeVisitor.streamsForbidden = true
+	for _, v := range spec.Const {
+		typeVisitor.reqType = v.Type //we mark the type that the overall expression must have, the declared type of the output stream
+		v.Val.Accept(&typeVisitor)
+	}
+	//streams are now alowed
+	typeVisitor.streamsForbidden = false
+
 	for _, v := range spec.Input {
 		//introduce all the input streams as declared so when they are used TypeVisitor can know if they were declared
 		typeVisitor.symTab[v.Name] = v.Type
 	}
 
-	for _, v := range spec.Output {
-		//we mark the type that the overall expression must have, the declared type of the output stream
+	for _, v := range spec.Output { //we do this first because the order in which output streams are iterated over is not always the same (using the same file)
 		typeVisitor.symTab[v.Name] = v.Type //output streams must be declared in order to be used by other output streams
-		typeVisitor.reqType = v.Type
+	}
+
+	for _, v := range spec.Output {
+		typeVisitor.reqType = v.Type //we mark the type that the overall expression must have, the declared type of the output stream
 		v.Expr.Accept(&typeVisitor)
 	}
 
 	for _, e := range typeVisitor.errors {
 		fmt.Printf(prefix+"Error %s\n", e)
 	}
-	/*for _, val := range ast {
-		switch v := val.(type) {
-		/*	case dLola.Spec:
-			fmt.Printf(prefix+"AST spec %s\n", v.Sprint())
-		case ConstDecl:
-			//v.Expr.Accept(&typeVisitor)
-		case InputDecl:
-			//v.Expr.Accept(&typeVisitor)
-		case OutputDecl:
-			//v.Expr.Accept(&typeVisitor)
-		case OutputDefinition:
-			v.Expr.Accept(&typeVisitor)
-
-		}
-	}*/
-
 }

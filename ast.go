@@ -15,7 +15,7 @@ const (
 	BoolT
 	StringT
 	Unknown  // we use this in the parser for unknow type values (offset expressions) that will be resolved later
-	LastType = StringT
+	LastType = Unknown
 )
 
 type StreamName string
@@ -25,20 +25,7 @@ func (s StreamName) Sprint() string {
 }
 
 func (t StreamType) Sprint() string {
-
 	type_names := []string{"num", "bool", "string"}
-
-	// str string
-	// switch t {
-	// case Int:
-	// 	str = "int"
-	// case Bool:
-	// 	str = "bool"
-	// case String:
-	// 	str = "string"
-	// }
-	// return str
-
 	if t >= LastType {
 		return ""
 	}

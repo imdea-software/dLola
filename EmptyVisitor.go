@@ -16,7 +16,7 @@ func (v *EmptyVisitor) VisitConstExpr(c ConstExpr) {
 }
 
 func (v *EmptyVisitor) VisitLetExpr(l LetExpr) {
-
+	emptyLet(v, l)
 }
 
 func (v *EmptyVisitor) VisitIfThenElseExpr(ite IfThenElseExpr) {
@@ -24,7 +24,7 @@ func (v *EmptyVisitor) VisitIfThenElseExpr(ite IfThenElseExpr) {
 }
 
 func (v *EmptyVisitor) VisitStringExpr(s StringExpr) {
-
+	s.StExpr.AcceptStr(v)
 }
 
 func (v *EmptyVisitor) VisitStreamOffsetExpr(s StreamOffsetExpr) {
@@ -60,6 +60,10 @@ func (v *EmptyVisitor) VisitOrPredicate(o OrPredicate) {
 
 func (v *EmptyVisitor) VisitNumComparisonPredicate(n NumComparisonPredicate) {
 	n.Comp.AcceptNumComp(v)
+}
+
+func (v *EmptyVisitor) VisitStrComparisonPredicate(s StrComparisonPredicate) {
+	s.Comp.AcceptStrComp(v)
 }
 
 /*END BoolExprVisitor methods*/
@@ -120,6 +124,22 @@ func (v *EmptyVisitor) VisitStreamFetchExpr(s StreamFetchExpr) {
 
 /*END StreamExprVisitor methods*/
 
+/*StrExprVisitor methods: strings*/
+
+func (v *EmptyVisitor) VisitStringLiteralExpr(s StringLiteralExpr) {
+
+}
+
+func (v *EmptyVisitor) VisitStrConcatExpr(s StrConcatExpr) {
+	emptyStrOp(v, s.Left, s.Right)
+}
+
+func (v *EmptyVisitor) VisitStrEqExpr(s StrEqExpr) {
+	emptyStrOp(v, s.Left, s.Right)
+}
+
+/*END StrExprVisitor methods*/
+
 /*Not exported functions*/
 func emptyNumOp(v *EmptyVisitor, left NumExpr, right NumExpr) {
 	left.AcceptNum(v)  //will treat the left expression
@@ -137,10 +157,14 @@ func emptyIf(v *EmptyVisitor, ite IfThenElseExpr) {
 	ite.Else.Accept(v) //will treat the right expression
 }
 
-/*func emptyLet(v *EmptyVisitor, l LetExpr) {
+func emptyLet(v *EmptyVisitor, l LetExpr) {
 	l.Bind.Accept(v) //will treat the right expression
 	l.Body.Accept(v) //will treat the right expression
 }
-*/
+
+func emptyStrOp(v *EmptyVisitor, left StrExpr, right StrExpr) {
+	left.AcceptStr(v)  //will treat the right expression
+	right.AcceptStr(v) //will treat the right expression
+}
 
 /*END Not exported functions*/

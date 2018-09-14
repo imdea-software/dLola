@@ -8,6 +8,7 @@ import (
 type BooleanExpr interface {
 	Sprint() string
 	AcceptBool(BooleanExprVisitor)
+	GetPos() Position
 }
 
 type BooleanExprVisitor interface {
@@ -21,6 +22,7 @@ type BooleanExprVisitor interface {
 	VisitStreamOffsetExpr(StreamOffsetExpr) //same method with same arguments as in ExprVisitor
 	//
 	VisitNumComparisonPredicate(NumComparisonPredicate)
+	VisitStrComparisonPredicate(StrComparisonPredicate)
 	//	VisitPathPredicate(PathPredicate)
 	//	VisitStrPredicate(StrPredicate)
 	//	VisitTagPredicate(TagPredicate)
@@ -54,6 +56,9 @@ type IfThenElsePredicate struct {
 }
 type NumComparisonPredicate struct {
 	Comp NumComparison
+}
+type StrComparisonPredicate struct {
+	Comp StrComparison
 }
 
 func BooleanExprToExpr(p BooleanExpr) Expr {
@@ -130,8 +135,8 @@ func NewOrPredicate(a, b interface{}) BooleanExpr {
 	return OrPredicate{first, right}
 }
 
-func NewNotPredicate(p interface{}) NotPredicate {
-	return NotPredicate{p.(BooleanExpr)}
+func NewNotPredicate(n interface{}) NotPredicate {
+	return NotPredicate{n.(BooleanExpr)}
 }
 
 func NewTruePredicate(p interface{}) TruePredicate {
@@ -161,6 +166,9 @@ func (p FalsePredicate) Sprint() string {
 	return fmt.Sprintf("false")
 }
 func (p NumComparisonPredicate) Sprint() string {
+	return p.Comp.Sprint()
+}
+func (p StrComparisonPredicate) Sprint() string {
 	return p.Comp.Sprint()
 }
 
@@ -200,6 +208,39 @@ func (this NumComparisonPredicate) AcceptBool(v BooleanExprVisitor) {
 	v.VisitNumComparisonPredicate(this)
 }
 
+func (this StrComparisonPredicate) AcceptBool(v BooleanExprVisitor) {
+	v.VisitStrComparisonPredicate(this)
+}
+
 func NewNumComparisonPredicate(a interface{}) NumComparisonPredicate {
 	return NumComparisonPredicate{a.(NumComparison)}
+}
+
+func NewStrComparisonPredicate(a interface{}) StrComparisonPredicate {
+	return StrComparisonPredicate{a.(StrComparison)}
+}
+
+func (this AndPredicate) GetPos() Position {
+	return this.Left.GetPos()
+}
+func (this OrPredicate) GetPos() Position {
+	return this.Left.GetPos()
+}
+func (this NotPredicate) GetPos() Position {
+	return this.Inner.GetPos()
+}
+func (this TruePredicate) GetPos() Position {
+	return this.Pos
+}
+func (this FalsePredicate) GetPos() Position {
+	return this.Pos
+}
+func (this IfThenElsePredicate) GetPos() Position {
+	return this.If.GetPos()
+}
+func (this NumComparisonPredicate) GetPos() Position {
+	return this.Comp.GetPos()
+}
+func (this StrComparisonPredicate) GetPos() Position {
+	return this.Comp.GetPos()
 }

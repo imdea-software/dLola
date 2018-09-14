@@ -7,7 +7,7 @@ import (
 
 /*ExprVisitor will pretty print the ast for a generic expression, receiving the current number of tabs(depth) and will increase it*/
 
-type PrettyPrinterVisitor struct { //implements ExprVisitor, BooleanExprVisitor, NumExprVisitor and NumComparisonVisitor
+type PrettyPrinterVisitor struct { //implements ExprVisitor, BooleanExprVisitor, NumExprVisitor, NumComparisonVisitor and StrVisitor
 	layer int    //depth of the expression in the overall AST, also number of tabs to print, need correct initialization(stateful)
 	s     string //string containing the formatted AST so far, need correct initialization (stateful)
 }
@@ -26,7 +26,9 @@ func (v *PrettyPrinterVisitor) VisitIfThenElseExpr(ite IfThenElseExpr) {
 }
 
 func (v *PrettyPrinterVisitor) VisitStringExpr(s StringExpr) {
-
+	tabsNow := strings.Repeat("\t", v.layer)
+	v.s += "StringExpr\n" + tabsNow
+	s.StExpr.AcceptStr(v)
 }
 
 func (v *PrettyPrinterVisitor) VisitStreamOffsetExpr(s StreamOffsetExpr) {
@@ -67,6 +69,10 @@ func (v *PrettyPrinterVisitor) VisitOrPredicate(o OrPredicate) {
 
 func (v *PrettyPrinterVisitor) VisitNumComparisonPredicate(n NumComparisonPredicate) {
 	n.Comp.AcceptNumComp(v)
+}
+
+func (v *PrettyPrinterVisitor) VisitStrComparisonPredicate(s StrComparisonPredicate) {
+	s.Comp.AcceptStrComp(v)
 }
 
 /*END BoolExprVisitor methods*/
@@ -130,7 +136,7 @@ func (v *PrettyPrinterVisitor) VisitStreamFetchExpr(s StreamFetchExpr) {
 /*StrExprVisitor methods: strings*/
 
 func (v *PrettyPrinterVisitor) VisitStringLiteralExpr(s StringLiteralExpr) {
-	v.s += s.Sprint()
+	v.s += "\"" + s.Sprint() + "\"" + "\n"
 }
 
 func (v *PrettyPrinterVisitor) VisitStrConcatExpr(s StrConcatExpr) {

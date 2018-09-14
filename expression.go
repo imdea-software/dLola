@@ -20,10 +20,14 @@ import (
 //
 // We use duck typing for this
 //
+type HasPos interface { //should be implemented by all structs that implement Expr or subStructs
+	GetPos() Position
+}
 
 type Expr interface {
 	Sprint() string
 	Accept(ExprVisitor)
+	GetPos() Position
 }
 type ExprVisitor interface {
 	VisitConstExpr(ConstExpr)
@@ -42,6 +46,7 @@ type ExprVisitor interface {
 
 type ConstExpr struct { // implements Expr,NumExpr,BoolExpr
 	Name StreamName
+	Pos  Position
 }
 
 type LetExpr struct {
@@ -54,7 +59,7 @@ type IfThenElseExpr struct { // implements Expr,NumExpr,BoolExpr
 	Then Expr
 	Else Expr
 }
-type StreamOffsetExpr struct { // StreamOffsetExpr implements Expr,NumExpr,BoolExpr
+type StreamOffsetExpr struct { // StreamOffsetExpr implements Expr,NumExpr,BoolExpr, StrExpr
 	SExpr StreamExpr
 }
 type BoolExpr struct {
@@ -96,6 +101,28 @@ func (this NumericExpr) Accept(visitor ExprVisitor) {
 }
 func (this StringExpr) Accept(visitor ExprVisitor) {
 	visitor.VisitStringExpr(this)
+}
+
+func (this ConstExpr) GetPos() Position {
+	return this.Pos
+}
+func (this LetExpr) GetPos() Position {
+	return this.Bind.GetPos()
+}
+func (this IfThenElseExpr) GetPos() Position {
+	return this.If.GetPos()
+}
+func (this StreamOffsetExpr) GetPos() Position {
+	return this.SExpr.GetPos()
+}
+func (this BoolExpr) GetPos() Position {
+	return this.BExpr.GetPos()
+}
+func (this NumericExpr) GetPos() Position {
+	return this.NExpr.GetPos()
+}
+func (this StringExpr) GetPos() Position {
+	return this.StExpr.GetPos()
 }
 
 /*striver
@@ -155,8 +182,8 @@ var (
 	TheNoTickExpr  NoTickExpr
 )
 */
-func NewConstExpr(a interface{}) ConstExpr {
-	return ConstExpr{getStreamName(a)}
+func NewConstExpr(a, p interface{}) ConstExpr {
+	return ConstExpr{getStreamName(a), NewPosition(p)}
 }
 func NewNumericExpr(a interface{}) NumericExpr {
 	return NumericExpr{a.(NumExpr)}
@@ -190,6 +217,7 @@ func NewTimeExpr(a interface{}) TimeExpr {
 type StreamExpr interface {
 	AcceptStream(StreamExprVisitor)
 	Sprint() string
+	GetPos() Position
 }
 
 type StreamExprVisitor interface {
@@ -272,6 +300,10 @@ func (e StreamFetchExpr) Sprint() string {
 	}
 }
 
+func (this StreamFetchExpr) GetPos() Position {
+	return this.Pos
+}
+
 /*
 func (this PrevEqValExpr) AcceptStream(v StreamExprVisitor) {
 	v.VisitPrevEqValExpr(this)
@@ -350,7 +382,8 @@ type DefaultExpr struct { //implements DefaultExpr
 	val  Printable
 }
 
-var InvalidVal BoolExpr = BoolExpr{TruePredicate{Position{-1, -1, -1}}} //nil is not allowed
+var InvalidPos Position = Position{-1, -1, -1}
+var InvalidVal BoolExpr = BoolExpr{TruePredicate{InvalidPos}} //nil is not allowed
 var InvalidDef = DefaultExpr{Unknown, InvalidVal}
 
 /*co must not be nil*/

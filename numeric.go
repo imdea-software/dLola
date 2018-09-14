@@ -12,6 +12,7 @@ import (
 type NumComparison interface {
 	Sprint() string
 	AcceptNumComp(NumComparisonVisitor)
+	GetPos() Position
 }
 
 type NumComparisonVisitor interface {
@@ -91,6 +92,25 @@ func (this NumNotEq) AcceptNumComp(visitor NumComparisonVisitor) {
 	visitor.VisitNumNotEq(this)
 }
 
+func (this NumLess) GetPos() Position {
+	return this.Left.GetPos()
+}
+func (this NumLessEq) GetPos() Position {
+	return this.Left.GetPos()
+}
+func (this NumGreater) GetPos() Position {
+	return this.Left.GetPos()
+}
+func (this NumGreaterEq) GetPos() Position {
+	return this.Left.GetPos()
+}
+func (this NumEq) GetPos() Position {
+	return this.Left.GetPos()
+}
+func (this NumNotEq) GetPos() Position {
+	return this.Left.GetPos()
+}
+
 func (this NumLess) Sprint() string {
 	return fmt.Sprintf("%s < %s", this.Left.Sprint(), this.Right.Sprint())
 }
@@ -116,6 +136,7 @@ func (this NumEq) Sprint() string {
 type NumExpr interface {
 	AcceptNum(NumExprVisitor)
 	Sprint() string
+	GetPos() Position
 }
 
 type NumExprVisitor interface {
@@ -174,6 +195,25 @@ func NewIntLiteralExpr(a, p interface{}) IntLiteralExpr {
 func NewFloatLiteralExpr(a, p interface{}) FloatLiteralExpr {
 	//	return FloatLiteralExpr{a.(float32)}
 	return FloatLiteralExpr{float32(a.(float64)), NewPosition(p)}
+}
+
+func (this IntLiteralExpr) GetPos() Position {
+	return this.Pos
+}
+func (this FloatLiteralExpr) GetPos() Position {
+	return this.Pos
+}
+func (this NumMulExpr) GetPos() Position {
+	return this.Left.GetPos()
+}
+func (this NumDivExpr) GetPos() Position {
+	return this.Left.GetPos()
+}
+func (this NumPlusExpr) GetPos() Position {
+	return this.Left.GetPos()
+}
+func (this NumMinusExpr) GetPos() Position {
+	return this.Left.GetPos()
 }
 
 func (e NumMulExpr) Sprint() string {

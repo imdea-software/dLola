@@ -29,7 +29,7 @@ InputStreamDecl <- INPUT t:Type n:Name {
     return NewInputDecl(n,t, c.pos),nil
 }
 
-OutputDefinition <- d:DefOut t:Type n:Name _? ASSIGN e:Block {
+OutputDefinition <- d:DefOut t:Type n:Name _? ASSIGN _? e:Block {
     return NewOutputDefinition(n,t,e, c.pos),nil
 }
 
@@ -47,7 +47,8 @@ Block <- LET n:Name ASSIGN e:Expr IN b:Block _? { return NewLetExpr(n,e,b),nil }
 Expr <- IF p:BooleanExpr THEN a:Expr ELSE b:Expr { return NewIfThenElseExpr(p,a,b),nil }
      / b:BooleanExpr { return b,nil }
      / n:NumExpr{ return n, nil }
-
+     / s:StrExpr{return s, nil}
+     
 // BooleanExpressions
 // Big OR of ANDS -> ands will be evaluated first and then ors
 BooleanExpr <- a:Ands    b:(OrExpr*) {
@@ -68,7 +69,7 @@ BooleanExpr <- a:Ands    b:(OrExpr*) {
 	       return BooleanExprToExpr(NewOrPredicate(a,b)),nil
 	    }
 
-OrExpr      <- OR p:Ands            { return p,nil }
+OrExpr      <- OR _? p:Ands            { return p,nil }
 
 Ands        <- a:NegExpr b:(AndExpr*)     {
 	       preds := ToSlice(b)
@@ -76,9 +77,9 @@ Ands        <- a:NegExpr b:(AndExpr*)     {
 	       return BooleanExprToExpr(NewAndPredicate(a,b)),nil
 	    }
 	    
-AndExpr     <- AND p:NegExpr { return p,nil }
+AndExpr     <- AND _? p:NegExpr { return p,nil }
 
-NegExpr     <- NOT p:NegExpr {
+NegExpr     <- NOT _? p:NegExpr {
 	    v, ok := p.(BoolExpr)
 	    var pred NotPredicate
 	    if ok{
@@ -90,29 +91,36 @@ NegExpr     <- NOT p:NegExpr {
 	    }
 	 /  p:Primary { return p,nil }
 	 
-Primary   <- '(' _? p:BooleanExpr ')' _?  { return p,nil }
-	   / a:AtomicBool {return a, nil}  // old:return a,nil testing:getBoolExpr(a)
-	   / n:NumComparison              { return BooleanExprToExpr(NewNumComparisonPredicate(n)),nil }	
+Primary   <- '(' _? p:BooleanExpr _? ')' _?  { return p,nil }
+	   / n:NumComparison _?              { return BooleanExprToExpr(NewNumComparisonPredicate(n)),nil }
+	   / s:StrComparison _? {return BooleanExprToExpr(NewStrComparisonPredicate(s)),nil}
+	   / a:AtomicBool _? {return a, nil}  // old:return a,nil testing:getBoolExpr(a)
 
 
-NumComparison <- a:NumExpr "<"  _? b:NumExpr { na,_:= getNumExpr(a)
+
+NumComparison <- a:NumExpr _? "<"  _? b:NumExpr { na,_:= getNumExpr(a)
 	      	 	   	   	     nb,_:= getNumExpr(b)
 	      	 	   	   	     return NewNumLess(na,nb),nil }
-              /  a:NumExpr "<=" _? b:NumExpr { na,_:= getNumExpr(a)
+              /  a:NumExpr _? "<=" _? b:NumExpr { na,_:= getNumExpr(a)
 	      	 	   	   	     nb,_:= getNumExpr(b)
 					     return NewNumLessEq(na,nb),nil }
-              /  a:NumExpr "="  _? b:NumExpr { na,_:= getNumExpr(a)
+              /  a:NumExpr _? "="  _? b:NumExpr { na,_:= getNumExpr(a)
 	      	 	   	   	     nb,_:= getNumExpr(b)
 					     return NewNumEq(na,nb),nil }
-              /  a:NumExpr ">"  _? b:NumExpr { na,_:= getNumExpr(a)
+              /  a:NumExpr _? ">"  _? b:NumExpr { na,_:= getNumExpr(a)
 	      	 	   	   	     nb,_:= getNumExpr(b)
 					     return NewNumGreater(na,nb),nil }
-              /  a:NumExpr ">=" _? b:NumExpr { na,_:= getNumExpr(a)
+              /  a:NumExpr _? ">=" _? b:NumExpr { na,_:= getNumExpr(a)
 	      	 	   	   	     nb,_:= getNumExpr(b)
 					     return NewNumGreaterEq(na,nb),nil }
-	      /	 a:NumExpr "!=" _? b:NumExpr { na,_:= getNumExpr(a)
+	      /	 a:NumExpr _? "!=" _? b:NumExpr { na,_:= getNumExpr(a)
 	      	 	   	   	     nb,_:= getNumExpr(b)
 					     return NewNumNotEq(na,nb),nil }
+
+StrComparison <- a:StrExpr _? "sEq"  _? b:StrExpr { na,_:= getStrExpr(a)
+	      	 	   	   	     nb,_:= getStrExpr(b)
+	      	 	   	   	     return NewStrEqExpr(na,nb),nil }
+
 
 /*Numeric expressions*/
 NumExpr  <- a:Mults b:(Plus*) {
@@ -156,12 +164,41 @@ MoreMults <- '*' _? e:BasicNumExpr { v, err := getNumExpr(e)
 BasicNumExpr <- '(' _? n:NumExpr ')' _?   { return n,nil } //old: n lm: getNumExpr(n)
            / a:AtomicNum { return a,nil } //return a, nil lm:added getNumExpr(a)
 
+
+StrExpr <- a:BasicStrExpr b:(MoreStr*){
+	     exprs := ToSlice(b) // common.ToSlice(b)
+	     if len(exprs)==0 {
+	     	v,err := getStrExpr(a)
+		if err == nil {
+	           return StrExprToExpr(v),nil //old: NumExprToExpr(a.(NumExpr)),nil lm: NumExprToExpr(getNumExpr(a))
+		} else {
+		  return nil, errors.New("StrExpr: Str expression is not string\n")
+		}
+	     } else {
+	       return FlattenStr(a,b),nil // common.Flatten(a,b)
+	     }
+          }
+    
+MoreStr <- STRCONCAT _? e:BasicStrExpr { v, err := getStrExpr(e)
+	     	    		     if err == nil{
+	     	    		     	   return NewRightStrConcatExpr(v),nil 
+					   } else {
+					   return nil, errors.New("MoreStr: BasicStrExpr is not string")
+				     }}
+
+BasicStrExpr <- '(' _? s:StrExpr ')' _?   { return s,nil } 
+           / a:AtomicStr { return a,nil } 
+
+
 /*Atoms used for each theory(type)*/
 AtomicBool <- co:ConstBool		    { return co, nil}
 	      / e:StreamExpr              { return NewStreamOffsetExpr(e),nil }
 
 AtomicNum <-  e:StreamExpr              { return NewStreamOffsetExpr(e),nil }
        	      / co:ConstNum		    { return co, nil}
+
+AtomicStr <-  e:StreamExpr              { return NewStreamOffsetExpr(e),nil }
+       	      / co:ConstStr		    { return co, nil}
 
 /*Streams are generic*/
 StreamExpr <- n:Name "["  _? t:OffsetExpr _? "|" _? co:Constant _? "]" _? { return NewStreamFetchExpr(n,t,co, c.pos),nil }
@@ -172,6 +209,7 @@ OffsetExpr <- n:NumLiteral {return n, nil}
 /*Every constant of every type, only accesible from StreamExpr as a default value!!!*/
 Constant <- b:ConstBool {return b,nil}
 	    / n:ConstNum {return n,nil}
+	    / s:ConstStr {return s,nil}
 //	/ k:ConstExpr               { return NewConstExpr(k),nil } // constant uses are treated syntactically as stream names
 
 /*Constants for each type*/
@@ -179,6 +217,8 @@ ConstBool <- TRUE _?                 { return NewTruePredicate(c.pos),nil } //ol
            / FALSE _?                  { return NewFalsePredicate(c.pos),nil }
 	   
 ConstNum <- l:NumLiteral _?           { return l,nil } //old:NewNumericExpr(l),nil this returns an NumericExpr which is an Expr, but in the general case the Numliteral will be in a NumExpr
+
+ConstStr <- l:QuotedString _?          { return l,nil } 
 
 ConstExpr <- n:Name { return n,nil } 
 
@@ -204,7 +244,7 @@ Name <- n:Identifier _? { return n.(Identifier),nil }
 QuotedString <- ('"'(([^'"''\\']*('\\'.[^'"''\\']*)*))'"')  {
 	        str := string(c.text)
 	     	inner := str[1:len(str)-1]
-     	        return NewQuotedString(inner),nil
+     	        return NewStringLiteralExpr(inner, c.pos),nil //old:NewQuotedString lm:
         }
 	
 JSONPath <- ([a-zA-Z0-9]+('.'[a-zA-Z0-9]+)*) {
@@ -227,11 +267,11 @@ _ "whitespace" <- [ \t\n\r]+
 //EOL     <- _? Comment? ("\r\n" / "\n\r" / "\r" / "\n" / EOF)
 EOL     <- ("\r\n" / "\n\r" / "\r" / "\n")
 
-Comment <- "//" [^\r\n]* [\r\n] {return "",nil }
-	/ "/*" [^"*/"]* "*/" {return "", nil}
+Comment <- // "//" [^\r\n]* [\r\n] {return "",nil }
+	  _? "/*" [^*/]* "*/" _?  { return "", nil}
 EOF     <- !.
 
-//
+// 
 // Striver Keywords
 //
 //DOT_TICKS <- ".ticks" _?
@@ -264,7 +304,7 @@ FALSE <- "false" _ / "false" EOF
 AND <- "and" _? //"/\\" _?
 OR <- "or" _? //"\\/" _?
 NOT <- "not" _? //"~" _?
-
+STRCONCAT <- "sConcat" _? 
 
 /*Function <- n:Name '(' a:Args ')' { //TODO: return proper data
 	    return n, nil
