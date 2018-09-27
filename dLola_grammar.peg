@@ -202,7 +202,7 @@ AtomicStr <-  e:StreamExpr              { return NewStreamOffsetExpr(e),nil }
 
 /*Streams are generic*/
 StreamExpr <- n:Name "["  _? t:OffsetExpr _? "|" _? co:Constant _? "]" _? { return NewStreamFetchExpr(n,t,co, c.pos),nil }
-	      / n:Name { return NewStreamFetchExpr(n,NewIntLiteralExpr(0, c.pos), nil, c.pos), nil } 
+	      / n:Name _? { return NewStreamFetchExpr(n,NewIntLiteralExpr(0, c.pos), nil, c.pos), nil } 
 
 OffsetExpr <- n:NumLiteral {return n, nil}
 

@@ -163,7 +163,7 @@ func (v *TypeVisitor) VisitStreamFetchExpr(s StreamFetchExpr) {
 		v.errors = append(v.errors, err)
 	}
 
-	if _, ok := streamoffset.(FloatLiteralExpr); ok { //streamoffset is a float
+	if streamoffset.err { //streamoffset is a float if _, ok := n.(FloatLiteralExpr); ok {
 		err := fmt.Sprintf("Line %d(%d): Stream %s cannot have a non integer offset ", s.Pos.Line, s.Pos.Col, streamname)
 		v.errors = append(v.errors, err)
 	}

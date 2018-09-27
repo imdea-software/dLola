@@ -272,10 +272,11 @@ func NewSuccValExpr(s, t interface{}) SuccValExpr {
 }
 */
 func NewStreamFetchExpr(s, t, co, p interface{}) StreamFetchExpr {
-	offset := t.(OffsetExpr)
+	pos := NewPosition(p)
+	offset := NewOffsetExpr(t)
 	name := getStreamName(s)
 	def := NewDefaultExpr(co)
-	return StreamFetchExpr{name, offset, def, NewPosition(p)}
+	return StreamFetchExpr{name, offset, def, pos}
 }
 
 /*
@@ -369,8 +370,18 @@ func (t Time_t) Sprint() string {
 //
 // Offset
 //
-type OffsetExpr interface { // OffsetExpr "implements" Time
-	Sprint() string
+type OffsetExpr struct { // OffsetExpr "implements" Time
+	err bool
+	val int
+}
+
+func NewOffsetExpr(n interface{}) OffsetExpr {
+	num, ok := n.(IntLiteralExpr)
+	return OffsetExpr{!ok, num.Num}
+}
+
+func (o OffsetExpr) Sprint() string {
+	return fmt.Sprintf("%d", o.val)
 }
 
 type Printable interface {
@@ -396,6 +407,17 @@ func NewDefaultExpr(co interface{}) DefaultExpr {
 			t = BoolT
 		} else {
 			t = NumT
+		}
+		switch co.(type) {
+		case TruePredicate:
+		case FalsePredicate:
+			t = BoolT
+		case NumExpr:
+			t = NumT
+		case StrExpr:
+			t = StringT
+		default:
+			t = Unknown
 		}
 		return DefaultExpr{t, co.(Printable)}
 	} else {

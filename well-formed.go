@@ -1,95 +1,229 @@
 package dLola
 
 import (
-	//	"errors"
+	"errors"
 	"fmt"
 )
 
-//adjacency matrix of the Dependency Graph
-//src dst weight of the adjacency
-type DepGraph map[string](map[string]int)
+/*Graph represented as a map*/
+type DepGraphAdj map[string][]Adj
+type Reachable map[string](map[string]struct{}) //will contain if there is a path (of any length) from the first to the second
 
-type Path struct {
+type Adj struct {
+	Src    string
+	Weight int
+	Dest   string
+}
+
+func (a Adj) Sprint() string {
+	//fmt.Printf("printing Adj %d\n", a.Weight)
+	return fmt.Sprintf("Adjacency{Src = %s, Weight= %d, Dest = %s}", a.Src, a.Weight, a.Dest)
+}
+
+func EqAdj(a, a2 Adj) bool {
+	return a.Weight == a2.Weight && a.Dest == a2.Dest && a.Src == a2.Src
+}
+
+func EqAdjs(a, a2 []Adj) bool {
+	res := false
+	if len(a) == len(a2) {
+		i := 0
+		for res = true; res; i++ {
+			res = res && EqAdj(a[i], a2[i])
+		}
+	}
+	return res
+}
+
+func SprintAdjs(as []Adj) string {
+	//fmt.Printf("printing Adjs \n")
+	s := "Adjs =["
+	for _, a := range as {
+		s += a.Sprint() + ","
+	}
+	return s + "]"
+}
+
+type PathAdj struct {
 	weight int
-	path   []string
+	path   []Adj
+}
+
+func SprintPathAdj(p PathAdj) string {
+	return fmt.Sprintf("PathAdj{ weight = %d, path = %s}", p.weight, SprintAdjs(p.path))
 }
 
 /*func (p Path) Sprint() string {
 	return fmt.Sprintf("%+v\n", p)
 }*/
 
-type ClasifiedPaths struct {
-	negs  []Path
-	zeros []Path
-	pos   []Path
+type ClasifiedPathsAdj struct {
+	negs  []PathAdj
+	zeros []PathAdj
+	pos   []PathAdj
 }
 
-func NewClasifiedPaths() ClasifiedPaths {
-	return ClasifiedPaths{make([]Path, 0), make([]Path, 0), make([]Path, 0)}
+func NewClasifiedPathsAdj() ClasifiedPathsAdj {
+	return ClasifiedPathsAdj{make([]PathAdj, 0), make([]PathAdj, 0), make([]PathAdj, 0)}
 }
 
-func (c ClasifiedPaths) Sprint() string {
+func (c ClasifiedPathsAdj) Sprint() string {
 	return fmt.Sprintf("%v", c)
 }
 
-func HasSelfRef(g DepGraph, src string) bool {
-	pending := Expand(g, src)
-	for cap(pending) != 0 {
-		//fmt.Printf("pending:%s\n", pending)
-		head := pending[0]
-		pending = pending[1:] //drop head
-		if head == src {
-			return true
-		} else {
-			l := Expand(g, head)
-			pending = append(pending, l...) //as append is a variadic function(take an arbitrary #args, with this notation it accepts a slice)
+/*functions*/
+func SpecToGraph(spec *Spec) DepGraphAdj {
+	sToGVisitor := SpecToGraphVisitor{DepGraphAdj{}, ""}
+	for _, v := range spec.Output {
+		sToGVisitor.s = v.Name.Sprint()
+		v.Expr.Accept(&sToGVisitor)
+	}
+	return sToGVisitor.g
+}
+
+func checkDepGraphAdj(g DepGraphAdj) []error {
+	err := make([]error, 0)
+	for node, adjs := range g {
+		for _, a := range adjs {
+			if node != a.Src {
+				err = append(err, errors.New(fmt.Sprintf("Adj %s does not start at node %s", a.Sprint(), node)))
+			}
 		}
-	} // if we reach this point, there were no self-references
-	return false
+	}
+	return err
 }
 
-/*in contrast to Self_ref this function will return EVERY loop in g from src and back*/
-func SelfRefLoops(g DepGraph, src string) []Path {
-	return visitNode(g, src, src, Path{0, []string{src}}, map[string]struct{}{}) //visitedNodes is a Set of strings
+func GetReachableAdj(g DepGraphAdj) (Reachable, []error) {
+	err := checkDepGraphAdj(g)
+	if len(err) != 0 {
+		return Reachable{}, err
+	}
+	reach := make(Reachable, 0)
+	for node, pending := range g {
+		//fmt.Printf("Node:%s\n", node)
+		reach[node] = make(map[string]struct{})
+		i := 0
+		for len(pending) != 0 /*&& i < 5*/ { // cap(pending)
+			//fmt.Printf("New it %d pending:%v\n", i, pending)
+			head := pending[0]
+			pending = pending[1:] //drop head
+			if _, ok := reach[node][head.Dest]; !ok /*|| head.Dest == node*/ {
+				reach[node][head.Dest] = struct{}{} //mark that head.Dest is reachable from node
+				//fmt.Printf("reach:%v\n", reach)
+				l := g[head.Dest]          // take adjacencies of the destiny
+				l = filter(l, reach[node]) //filter those adjacencies that lead to an already reachable node
+				//fmt.Printf("appending :%v\n", l)
+				pending = append(pending, l...) //as append is a variadic function(take an arbitrary #args, with this notation it accepts a slice)
+			}
+			i++
+		}
+	}
+	return reach, []error{}
 }
 
+/*will filter all those adjacencies of a node that lead to an already reachable node*/
+func filter(l []Adj, reachable map[string]struct{}) []Adj {
+	//fmt.Printf("Candidates for appending :%v\n", l)
+	for _, a := range l {
+		if _, ok := reachable[a.Dest]; ok { //if present we drop the element
+			l = remove(l, a)
+		}
+	}
+	return l
+}
+
+func visitedDest(path []Adj, node string) bool {
+	//fmt.Printf("path %v, node %s", path, node)
+	is := false
+	for i := 0; i < len(path) && !is; i++ {
+		if /*path[i].Src == node ||*/ path[i].Dest == node {
+			is = true
+		}
+	}
+	return is
+}
+
+func remove(l []Adj, a Adj) []Adj {
+	r := make([]Adj, 0)
+	for _, v := range l {
+		if !EqAdj(v, a) {
+			r = append(r, v)
+		}
+	}
+	return r
+}
+
+func elem(as []Adj, a Adj, f func(Adj, Adj) bool) bool { //will usually be called with f = EqAdj
+	//fmt.Printf("path %v, node %s", path, node)
+	is := false
+	for i := 0; i < len(as) && !is; i++ {
+		if f(a, as[i]) {
+			is = true
+		}
+	}
+	return is
+}
+
+/*in contrast to Self_ref this function will return EVERY SIMPLE (cannot repeat nodes) loop in g from src and back*/
+func SimpleCyclesAdj(g DepGraphAdj, r Reachable) ([]PathAdj, []error) {
+	err := checkDepGraphAdj(g)
+	if len(err) != 0 {
+		return []PathAdj{}, err
+	}
+	loops := make([]PathAdj, 0)
+	for src, _ := range g {
+		if _, ok := r[src][src]; ok { //only if the node is reachable from itself we look for simple cycles
+			loops = append(loops, visitNodeAdj(g, src, src, PathAdj{0, []Adj{}})...) //visitedNodes is a Set of strings)
+		}
+	}
+	return loops, []error{}
+}
+
+//IMPORTANT MAPS & SLICES in GO are pointers, so as they are modified down in the recursion when going up, they are changed
 /*Expands the adjacencies of cur, and then searches for loops on them updating the path*/
-func visitNode(g DepGraph, src, cur string, path Path, visitedNodes map[string]struct{}) []Path {
-	visitedNodes[cur] = struct{}{} //add it to the set so the node is not visited again
-	pending := Expand(g, cur)
-	//	fmt.Printf("pending:%s\n", pending)
-	loops := make([]Path, 0)
+func visitNodeAdj(g DepGraphAdj, src, cur_node string, path PathAdj) []PathAdj {
+	//fmt.Printf("I'm in node :%s\n", cur_node)
+	pending := g[cur_node] // :: Adj
+	//fmt.Printf("pending:%s\n", SprintAdjs(pending))
+	loops := make([]PathAdj, 0)
 	for _, c := range pending {
-		cpath := Path{path.weight + g[cur][c], append(path.path, c)} //adjacency traversed, NOTE IT IS A NEW PATH
-		loops = append(loops, selfRefLoopsAux(g, src, c, cpath, visitedNodes)...)
+		//fmt.Printf("current node: %s path: %v\n", cur_node, path)
+		loops = append(loops, decideAdj(g, src, c, path)...)
 	}
+	//fmt.Printf("returning loops of node %s:%v\n", cur_node, loops)
 	return loops
 }
 
-//cur will always be an adjacency of src, a child in the exploration path
-func selfRefLoopsAux(g DepGraph, src string, cur string, path Path, visitedNodes map[string]struct{}) []Path {
-	loops := make([]Path, 0)
-	if cur == src {
-		loops = append(loops, path) //we found a loop from src [to other nodes] to src, so we add the path of the loop
-	} else {
-		if _, ok := visitedNodes[cur]; !ok { //only if not already visited we visit, IMPORTANT: every adjacency is explored just once!!!
-			loops = visitNode(g, src, cur, path, visitedNodes)
+//cur will always be an adjacency of src to a child in the exploration path
+//decides if the adj takes to src, then we found a loop, othw it takes it and will continue exploring the node cur.Dest
+func decideAdj(g DepGraphAdj, src string, cur Adj, path PathAdj) []PathAdj {
+	//fmt.Printf("Deciding adj :%s\n", cur.Sprint())
+	loops := make([]PathAdj, 0)
+	if shouldVisit(cur, path) { //only if not already visited we visit, IMPORTANT: every node may appear in the path just once!!!
+		//fmt.Printf("Decide to visit adj :%s\n", cur.Sprint())
+		cpath := PathAdj{path.weight + cur.Weight, append(path.path, cur)} //adjacency traversed, NOTE IT IS A NEW PATH
+		//visited[cur.Dest] = struct{}{} //add it to the set so the Adj is not visited again
+		if cur.Dest == src {
+			//fmt.Printf("Found LOOP!! :%v\n", SprintPathAdj(cpath))
+			//loops = append(loops, path)
+			loops = []PathAdj{cpath} //we found a loop from src [to other nodes] to src, so we add the path of the loop
+		} else {
+			loops = visitNodeAdj(g, src, cur.Dest, cpath) //IMPORTANT cpath is passed as value, othw the backtracking of the recursion will produce errors in the path of the cycles!!!
 		}
+
+	} else {
+		//fmt.Printf("Decide not to visit:%s\n", cur.Sprint())
 	}
+
 	return loops
 }
 
-func Expand(g DepGraph, src string) []string {
-	adjacent := g[src]
-	res := make([]string, 0)
-	for key, _ := range adjacent {
-		res = append(res, key)
-	}
-	return res
+func shouldVisit(cur Adj, path PathAdj) bool {
+	return !visitedDest(path.path, cur.Dest)
 }
 
-func ClasifyPaths(paths []Path) ClasifiedPaths {
-	cpaths := NewClasifiedPaths()
+func ClasifyPathsAdj(paths []PathAdj) ClasifiedPathsAdj {
+	cpaths := NewClasifiedPathsAdj()
 	for _, p := range paths {
 		if p.weight < 0 {
 			cpaths.negs = append(cpaths.negs, p)
