@@ -205,7 +205,6 @@ func decideAdj(g DepGraphAdj, src string, cur Adj, path PathAdj) []PathAdj {
 		//visited[cur.Dest] = struct{}{} //add it to the set so the Adj is not visited again
 		if cur.Dest == src {
 			//fmt.Printf("Found LOOP!! :%v\n", SprintPathAdj(cpath))
-			//loops = append(loops, path)
 			loops = []PathAdj{cpath} //we found a loop from src [to other nodes] to src, so we add the path of the loop
 		} else {
 			loops = visitNodeAdj(g, src, cur.Dest, cpath) //IMPORTANT cpath is passed as value, othw the backtracking of the recursion will produce errors in the path of the cycles!!!
@@ -222,7 +221,42 @@ func shouldVisit(cur Adj, path PathAdj) bool {
 	return !visitedDest(path.path, cur.Dest)
 }
 
-func ClasifyPathsAdj(paths []PathAdj) ClasifiedPathsAdj {
+func CreateCycleMap(cycles []PathAdj) map[string]ClasifiedPathsAdj {
+	res := make(map[string]ClasifiedPathsAdj)
+	for _, p := range cycles {
+		//fmt.Printf("Path %v, res = %v\n", p, res)
+		src := p.path[0].Src
+		c, ok := res[src]
+		if !ok { //there were not previous clasifiedPathsAdj
+			//fmt.Printf("there were no previous cycles for this stream: %s\n", src)
+			cpaths := NewClasifiedPathsAdj()
+			res[src] = appendPath(&cpaths, p)
+		} else {
+			//fmt.Printf("there were previous cycles for this stream: %s\n", src)
+			res[src] = appendPath(&c, p)
+		}
+	}
+	//fmt.Printf("Returning Path %v\n", res)
+	return res
+}
+
+/*Appends p to cpaths depending on its weight*/
+func appendPath(cpaths *ClasifiedPathsAdj, p PathAdj) ClasifiedPathsAdj {
+	//fmt.Printf("Appending Path %v to %v\n", p, cpaths)
+	if p.weight < 0 {
+		cpaths.negs = append(cpaths.negs, p)
+	} else {
+		if p.weight == 0 {
+			cpaths.zeros = append(cpaths.zeros, p)
+		} else {
+			cpaths.pos = append(cpaths.pos, p)
+		}
+	}
+	//fmt.Printf("Updated Path %v\n", cpaths)
+	return *cpaths
+}
+
+/*func ClasifyPathsAdj(paths []PathAdj) ClasifiedPathsAdj {
 	cpaths := NewClasifiedPathsAdj()
 	for _, p := range paths {
 		if p.weight < 0 {
@@ -236,4 +270,50 @@ func ClasifyPathsAdj(paths []PathAdj) ClasifiedPathsAdj {
 		}
 	}
 	return cpaths
+}*/
+
+func IsWF(m map[string]ClasifiedPathsAdj) []error {
+	err := make([]error, 0)
+	for stream, cycles := range m {
+		if len(cycles.zeros) != 0 {
+			err = append(err, errors.New(fmt.Sprintf("Stream %s has 0 weight cycles: %v", stream, cycles.zeros)))
+		}
+		if len(cycles.pos) != 0 && len(cycles.negs) != 0 {
+			err = append(err, errors.New(fmt.Sprintf("Stream %s has both positive and negative weight simple cycles:Positives: %v Negatives: %v", stream, cycles.pos, cycles.negs)))
+		}
+		err = append(err, checkComplexCycles(stream, cycles, m)...)
+	}
+	return err
+}
+
+func checkComplexCycles(stream string, cycles ClasifiedPathsAdj, m map[string]ClasifiedPathsAdj) []error {
+	err := make([]error, 0)
+	for _, n := range cycles.negs {
+		err = append(err, complexCycle(stream, n, m)...)
+	}
+	for _, z := range cycles.zeros {
+		err = append(err, complexCycle(stream, z, m)...)
+	}
+	for _, p := range cycles.pos {
+		err = append(err, complexCycle(stream, p, m)...)
+	}
+	return err
+}
+
+func complexCycle(stream string, c PathAdj, m map[string]ClasifiedPathsAdj) []error {
+	err := make([]error, 0)
+	for _, adj := range c.path {
+		node := adj.Dest
+		if node != stream {
+			if c.weight < 0 && len(m[node].pos) != 0 {
+				err = append(err, errors.New(fmt.Sprintf("Stream %s has a negative simple cycle %v which includes a node %s that has positive simple cycles: %v", stream, c, node, m[node].pos)))
+			} else {
+				if c.weight > 0 && len(m[node].negs) != 0 {
+					err = append(err, errors.New(fmt.Sprintf("Stream %s has a positive simple cycle %v which includes a node %s that has negative simple cycles: %v", stream, c, node, m[node].negs)))
+				}
+
+			}
+		}
+	}
+	return err
 }
