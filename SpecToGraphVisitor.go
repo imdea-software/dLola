@@ -33,7 +33,7 @@ func (v *SpecToGraphVisitor) VisitStreamOffsetExpr(s StreamOffsetExpr) {
 	s.SExpr.AcceptStream(v)
 }
 
-func (v *SpecToGraphVisitor) VisitBoolExpr(b BoolExpr) {
+func (v *SpecToGraphVisitor) VisitBooleanExpr(b BooleanExpr) {
 	b.BExpr.AcceptBool(v)
 }
 
@@ -157,7 +157,7 @@ func specToGraphNumOp(v *SpecToGraphVisitor, left NumExpr, right NumExpr) {
 	right.AcceptNum(v) //will treat the right expression
 }
 
-func specToGraphBoolOp(v *SpecToGraphVisitor, left BooleanExpr, right BooleanExpr) {
+func specToGraphBoolOp(v *SpecToGraphVisitor, left BoolExpr, right BoolExpr) {
 	left.AcceptBool(v)  //will treat the left expression
 	right.AcceptBool(v) //will treat the right expression
 }

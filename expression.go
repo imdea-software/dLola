@@ -28,6 +28,7 @@ type Expr interface {
 	Sprint() string
 	Accept(ExprVisitor)
 	GetPos() Position
+	InstantiateExpr(int, int) InstExpr // implemented in InstantiateExpr.go
 }
 type ExprVisitor interface {
 	VisitConstExpr(ConstExpr)
@@ -35,7 +36,7 @@ type ExprVisitor interface {
 	VisitIfThenElseExpr(IfThenElseExpr)
 	VisitStringExpr(StringExpr)
 	VisitStreamOffsetExpr(StreamOffsetExpr)
-	VisitBoolExpr(BoolExpr)
+	VisitBooleanExpr(BooleanExpr)
 	VisitNumericExpr(NumericExpr)
 	/*striver
 	VisitTimeExpr(TimeExpr)
@@ -44,7 +45,7 @@ type ExprVisitor interface {
 	*/
 }
 
-type ConstExpr struct { // implements Expr,NumExpr,BoolExpr
+type ConstExpr struct { // implements Expr,NumExpr,BooleanExpr
 	Name StreamName
 	Pos  Position
 }
@@ -62,8 +63,8 @@ type IfThenElseExpr struct { // implements Expr,NumExpr,BoolExpr
 type StreamOffsetExpr struct { // StreamOffsetExpr implements Expr,NumExpr,BoolExpr, StrExpr
 	SExpr StreamExpr
 }
-type BoolExpr struct {
-	BExpr BooleanExpr
+type BooleanExpr struct {
+	BExpr BoolExpr
 }
 type NumericExpr struct {
 	NExpr NumExpr
@@ -93,8 +94,8 @@ func (this IfThenElseExpr) Accept(visitor ExprVisitor) {
 func (this StreamOffsetExpr) Accept(visitor ExprVisitor) {
 	visitor.VisitStreamOffsetExpr(this)
 }
-func (this BoolExpr) Accept(visitor ExprVisitor) {
-	visitor.VisitBoolExpr(this)
+func (this BooleanExpr) Accept(visitor ExprVisitor) {
+	visitor.VisitBooleanExpr(this)
 }
 func (this NumericExpr) Accept(visitor ExprVisitor) {
 	visitor.VisitNumericExpr(this)
@@ -115,7 +116,7 @@ func (this IfThenElseExpr) GetPos() Position {
 func (this StreamOffsetExpr) GetPos() Position {
 	return this.SExpr.GetPos()
 }
-func (this BoolExpr) GetPos() Position {
+func (this BooleanExpr) GetPos() Position {
 	return this.BExpr.GetPos()
 }
 func (this NumericExpr) GetPos() Position {
@@ -159,7 +160,7 @@ func (this NumericExpr) Sprint() string {
 func (this StreamOffsetExpr) Sprint() string {
 	return this.SExpr.Sprint()
 }
-func (this BoolExpr) Sprint() string {
+func (this BooleanExpr) Sprint() string {
 	return this.BExpr.Sprint()
 }
 func (this StringExpr) Sprint() string {
@@ -191,8 +192,8 @@ func NewNumericExpr(a interface{}) NumericExpr {
 func NewStreamOffsetExpr(a interface{}) StreamOffsetExpr {
 	return StreamOffsetExpr{a.(StreamExpr)}
 }
-func NewBoolExpr(b interface{}) BoolExpr {
-	return BoolExpr{b.(BooleanExpr)}
+func NewBooleanExpr(b interface{}) BooleanExpr {
+	return BooleanExpr{b.(BoolExpr)}
 }
 func NewIfThenElseExpr(p, a, b interface{}) IfThenElseExpr {
 	return IfThenElseExpr{p.(Expr), a.(Expr), b.(Expr)}
@@ -218,6 +219,10 @@ type StreamExpr interface {
 	AcceptStream(StreamExprVisitor)
 	Sprint() string
 	GetPos() Position
+	InstantiateStreamExpr(int, int) InstExpr //note it is generic
+	InstantiateBoolStreamExpr(int, int) InstBoolExpr
+	InstantiateNumStreamExpr(int, int) InstNumExpr
+	InstantiateStrStreamExpr(int, int) InstStrExpr
 }
 
 type StreamExprVisitor interface {
@@ -394,20 +399,13 @@ type DefaultExpr struct { //implements DefaultExpr
 }
 
 var InvalidPos Position = Position{-1, -1, -1}
-var InvalidVal BoolExpr = BoolExpr{TruePredicate{InvalidPos}} //nil is not allowed
+var InvalidVal BooleanExpr = BooleanExpr{TruePredicate{InvalidPos}} //nil is not allowed
 var InvalidDef = DefaultExpr{Unknown, InvalidVal}
 
 /*co must not be nil*/
 func NewDefaultExpr(co interface{}) DefaultExpr {
 	var t StreamType
 	if co != nil {
-		_, ok := co.(TruePredicate)
-		_, ok2 := co.(FalsePredicate)
-		if ok || ok2 { //it is either True or False
-			t = BoolT
-		} else {
-			t = NumT
-		}
 		switch co.(type) {
 		case TruePredicate:
 		case FalsePredicate:

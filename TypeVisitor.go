@@ -48,7 +48,7 @@ func (v *TypeVisitor) VisitStreamOffsetExpr(s StreamOffsetExpr) {
 	s.SExpr.AcceptStream(v)
 }
 
-func (v *TypeVisitor) VisitBoolExpr(b BoolExpr) {
+func (v *TypeVisitor) VisitBooleanExpr(b BooleanExpr) {
 	if v.reqType != BoolT {
 		s := fmt.Sprintf("Line %d(%d): Cannot assign a Boolean expression to a %s stream", b.GetPos().Line, b.GetPos().Col, v.reqType.Sprint())
 		v.errors = append(v.errors, s)
@@ -221,7 +221,7 @@ func checkTypeNumOp(v *TypeVisitor, left NumExpr, right NumExpr) {
 	right.AcceptNum(v) //will check the right expression
 }
 
-func checkTypeBoolOp(v *TypeVisitor, left BooleanExpr, right BooleanExpr) {
+func checkTypeBoolOp(v *TypeVisitor, left BoolExpr, right BoolExpr) {
 	v.reqType = BoolT
 	left.AcceptBool(v)  //will check the left expression
 	v.reqType = BoolT   //IMPORTANT:this is needed because there are expressions that return a boolean but their operands are not boolean, and therefore they will request appropiate types, e.g. "a" SEq "b" and true

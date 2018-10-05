@@ -5,13 +5,14 @@ import (
 	"fmt"
 )
 
-type BooleanExpr interface {
+type BoolExpr interface {
 	Sprint() string
-	AcceptBool(BooleanExprVisitor)
+	AcceptBool(BoolExprVisitor)
 	GetPos() Position
+	InstantiateBoolExpr(int, int) InstBoolExpr
 }
 
-type BooleanExprVisitor interface {
+type BoolExprVisitor interface {
 	VisitTruePredicate(TruePredicate)
 	VisitFalsePredicate(FalsePredicate)
 	VisitNotPredicate(NotPredicate)
@@ -39,21 +40,22 @@ type TruePredicate struct{ Pos Position }
 type FalsePredicate struct{ Pos Position }
 
 type NotPredicate struct {
-	Inner BooleanExpr
+	Inner BoolExpr
 }
 type AndPredicate struct {
-	Left  BooleanExpr
-	Right BooleanExpr
+	Left  BoolExpr
+	Right BoolExpr
 }
 type OrPredicate struct {
-	Left  BooleanExpr
-	Right BooleanExpr
+	Left  BoolExpr
+	Right BoolExpr
 }
-type IfThenElsePredicate struct {
-	If   BooleanExpr
-	Then BooleanExpr
-	Else BooleanExpr
-}
+
+/*type IfThenElsePredicate struct {
+	If   BoolExpr
+	Then BoolExpr
+	Else BoolExpr
+}*/
 type NumComparisonPredicate struct {
 	Comp NumComparison
 }
@@ -61,40 +63,25 @@ type StrComparisonPredicate struct {
 	Comp StrComparison
 }
 
-func BooleanExprToExpr(p BooleanExpr) Expr {
+func BoolExprToExpr(p BoolExpr) Expr {
 	if s, ok := p.(StreamOffsetExpr); ok {
 		return s
 	} else if k, ok := p.(ConstExpr); ok {
 		return k
 	} else {
-		return NewBoolExpr(p)
+		return NewBooleanExpr(p)
 	}
 }
 
-func getBoolExpr(e interface{}) (BooleanExpr, error) {
-	//	fmt.Printf("Converting %s to bool\n", e)
-	/*if v, ok := e.(BoolExpr); ok {
-		fmt.Printf("Is BoolExpr \n", e)
-		return v.BExpr, nil
-	} else if v, ok := e.(StreamOffsetExpr); ok {
-		fmt.Printf("Is Stream \n", e)
-		return v, nil
-	} else if k, ok := e.(ConstExpr); ok {
-		fmt.Printf("Is ConstExpr \n", e)
-		return k, nil
-	} else {
-		fmt.Printf("Is error \n", e)
-		str := fmt.Sprintf("cannot convert to bool \"%s\"\n", e.(Expr).Sprint())
-		return nil, errors.New(str)
-	}*/
+func getBoolExpr(e interface{}) (BoolExpr, error) {
 	switch v := e.(type) {
-	case BoolExpr:
+	case BooleanExpr:
 		return v.BExpr, nil
 	case StreamOffsetExpr:
 		return v, nil
 	case ConstExpr:
 		return v, nil
-	case BooleanExpr:
+	case BoolExpr:
 		return v, nil
 	case TruePredicate:
 		return v, nil
@@ -107,7 +94,7 @@ func getBoolExpr(e interface{}) (BooleanExpr, error) {
 	}
 }
 
-func NewAndPredicate(a, b interface{}) BooleanExpr {
+func NewAndPredicate(a, b interface{}) BoolExpr {
 	preds := ToSlice(b)
 	first, _ := getBoolExpr(a)
 	if len(preds) == 0 {
@@ -121,7 +108,7 @@ func NewAndPredicate(a, b interface{}) BooleanExpr {
 	ret := AndPredicate{first, right}
 	return ret
 }
-func NewOrPredicate(a, b interface{}) BooleanExpr {
+func NewOrPredicate(a, b interface{}) BoolExpr {
 	preds := ToSlice(b)
 	first, _ := getBoolExpr(a)
 	if len(preds) == 0 {
@@ -136,7 +123,7 @@ func NewOrPredicate(a, b interface{}) BooleanExpr {
 }
 
 func NewNotPredicate(n interface{}) NotPredicate {
-	return NotPredicate{n.(BooleanExpr)}
+	return NotPredicate{n.(BoolExpr)}
 }
 
 func NewTruePredicate(p interface{}) TruePredicate {
@@ -172,43 +159,43 @@ func (p StrComparisonPredicate) Sprint() string {
 	return p.Comp.Sprint()
 }
 
-func (this TruePredicate) AcceptBool(v BooleanExprVisitor) {
+func (this TruePredicate) AcceptBool(v BoolExprVisitor) {
 	v.VisitTruePredicate(this)
 }
-func (this FalsePredicate) AcceptBool(v BooleanExprVisitor) {
+func (this FalsePredicate) AcceptBool(v BoolExprVisitor) {
 	v.VisitFalsePredicate(this)
 }
-func (this NotPredicate) AcceptBool(v BooleanExprVisitor) {
+func (this NotPredicate) AcceptBool(v BoolExprVisitor) {
 	v.VisitNotPredicate(this)
 }
-func (this AndPredicate) AcceptBool(v BooleanExprVisitor) {
+func (this AndPredicate) AcceptBool(v BoolExprVisitor) {
 	v.VisitAndPredicate(this)
 }
-func (this OrPredicate) AcceptBool(v BooleanExprVisitor) {
+func (this OrPredicate) AcceptBool(v BoolExprVisitor) {
 	v.VisitOrPredicate(this)
 }
 
-func (this IfThenElseExpr) AcceptBool(v BooleanExprVisitor) {
+func (this IfThenElseExpr) AcceptBool(v BoolExprVisitor) {
 	v.VisitIfThenElseExpr(this)
 }
 
-// ConstExpr implement AcceptBool so StreamExpr are BooleanExpr
+// ConstExpr implement AcceptBool so StreamExpr are BoolExpr
 
-func (this ConstExpr) AcceptBool(v BooleanExprVisitor) {
+func (this ConstExpr) AcceptBool(v BoolExprVisitor) {
 	v.VisitConstExpr(this)
 }
 
-// StreamExpr impleemnts AcceptBool so StreamExpr are Booleanexpr
+// StreamExpr impleemnts AcceptBool so StreamExpr are Boolexpr
 
-func (this StreamOffsetExpr) AcceptBool(v BooleanExprVisitor) {
+func (this StreamOffsetExpr) AcceptBool(v BoolExprVisitor) {
 	v.VisitStreamOffsetExpr(this)
 }
 
-func (this NumComparisonPredicate) AcceptBool(v BooleanExprVisitor) {
+func (this NumComparisonPredicate) AcceptBool(v BoolExprVisitor) {
 	v.VisitNumComparisonPredicate(this)
 }
 
-func (this StrComparisonPredicate) AcceptBool(v BooleanExprVisitor) {
+func (this StrComparisonPredicate) AcceptBool(v BoolExprVisitor) {
 	v.VisitStrComparisonPredicate(this)
 }
 
@@ -235,9 +222,10 @@ func (this TruePredicate) GetPos() Position {
 func (this FalsePredicate) GetPos() Position {
 	return this.Pos
 }
-func (this IfThenElsePredicate) GetPos() Position {
+
+/*func (this IfThenElsePredicate) GetPos() Position {
 	return this.If.GetPos()
-}
+}*/
 func (this NumComparisonPredicate) GetPos() Position {
 	return this.Comp.GetPos()
 }

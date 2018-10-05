@@ -13,6 +13,7 @@ type NumComparison interface {
 	Sprint() string
 	AcceptNumComp(NumComparisonVisitor)
 	GetPos() Position
+	InstantiateNumCompExpr(int, int) InstNumComparison
 }
 
 type NumComparisonVisitor interface {
@@ -137,6 +138,7 @@ type NumExpr interface {
 	AcceptNum(NumExprVisitor)
 	Sprint() string
 	GetPos() Position
+	InstantiateNumExpr(int, int) InstNumExpr
 }
 
 type NumExprVisitor interface {
@@ -228,7 +230,6 @@ func (e NumPlusExpr) Sprint() string {
 func (e NumMinusExpr) Sprint() string {
 	return fmt.Sprintf("(%s)%s(%s)", e.Left.Sprint(), "-", e.Right.Sprint())
 }
-
 func (e IntLiteralExpr) Sprint() string {
 	return strconv.Itoa(e.Num)
 }

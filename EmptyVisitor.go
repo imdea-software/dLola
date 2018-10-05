@@ -6,7 +6,7 @@ package dLola
 )*/
 
 /*Empty Visitor that traverses recursively the AST, CODE MAY NEED TO BE ADDED IN THEIR SPECIFIC PLACES*/
-type EmptyVisitor struct { //implements ExprVisitor, BooleanExprVisitor, NumExprVisitor, NumComparisonVisitor and StreamExprVisitor
+type EmptyVisitor struct { //implements ExprVisitor, BoolExprVisitor, NumExprVisitor, NumComparisonVisitor and StreamExprVisitor
 	//fields, may be stateful
 }
 
@@ -31,7 +31,7 @@ func (v *EmptyVisitor) VisitStreamOffsetExpr(s StreamOffsetExpr) {
 	s.SExpr.AcceptStream(v)
 }
 
-func (v *EmptyVisitor) VisitBoolExpr(b BoolExpr) {
+func (v *EmptyVisitor) VisitBooleanExpr(b BooleanExpr) {
 	b.BExpr.AcceptBool(v)
 }
 
@@ -146,7 +146,7 @@ func emptyNumOp(v *EmptyVisitor, left NumExpr, right NumExpr) {
 	right.AcceptNum(v) //will treat the right expression
 }
 
-func emptyBoolOp(v *EmptyVisitor, left BooleanExpr, right BooleanExpr) {
+func emptyBoolOp(v *EmptyVisitor, left BoolExpr, right BoolExpr) {
 	left.AcceptBool(v)  //will treat the left expression
 	right.AcceptBool(v) //will treat the right expression
 }

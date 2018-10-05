@@ -61,14 +61,14 @@ BooleanExpr <- a:Ands    b:(OrExpr*) {
 		  fmt.Printf("Error %s", err)
 		  if err == nil{
 		     fmt.Printf("boolean NO error: %s", v.Sprint())
-	       	     return BooleanExprToExpr(v),nil //old: a,nil lm:BooleanExprToExpr(a), nil
+	       	     return BoolExprToExpr(v),nil //old: a,nil lm:BoolExprToExpr(a), nil
 		  } else {
 		  fmt.Printf("boolean error")
-		    return nil, errors.New("BooleanExpr: Ands expression is not boolean")
+		    return nil, errors.New("BoolExpr: Ands expression is not boolean")
 		  }
 	       }
 	       fmt.Printf("boolean expr with ors")
-	       return BooleanExprToExpr(NewOrPredicate(a,b)),nil
+	       return BoolExprToExpr(NewOrPredicate(a,b)),nil
 	    }
 
 OrExpr      <- OR p:Ands            { return p,nil }
@@ -76,12 +76,12 @@ OrExpr      <- OR p:Ands            { return p,nil }
 Ands        <- a:NegExpr b:(AndExpr*)     {
 	       preds := ToSlice(b)
 	       if len(preds)==0 { return a,nil }
-	       return BooleanExprToExpr(NewAndPredicate(a,b)),nil
+	       return BoolExprToExpr(NewAndPredicate(a,b)),nil
 	    }
 	    
 AndExpr     <- AND p:NegExpr { return p,nil }
 
-NegExpr     <- NOT p:NegExpr { return NewBoolExpr(NewNotPredicate(p)),nil }
+NegExpr     <- NOT p:NegExpr { return NewBooleanExpr(NewNotPredicate(p)),nil }
 	 /  p:Primary { return p,nil }
 	 
 Primary   <- '(' _? p:BooleanExpr ')' _?  { return p,nil }

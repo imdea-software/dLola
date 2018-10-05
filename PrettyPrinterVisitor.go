@@ -35,7 +35,7 @@ func (v *PrettyPrinterVisitor) VisitStreamOffsetExpr(s StreamOffsetExpr) {
 	v.s += s.Sprint() + "\n"
 }
 
-func (v *PrettyPrinterVisitor) VisitBoolExpr(b BoolExpr) {
+func (v *PrettyPrinterVisitor) VisitBooleanExpr(b BooleanExpr) {
 	tabsNow := strings.Repeat("\t", v.layer)
 	v.s += "BoolExpr\n" + tabsNow
 	b.BExpr.AcceptBool(v)
@@ -161,7 +161,7 @@ func prettyNumOp(v *PrettyPrinterVisitor, op string, left NumExpr, right NumExpr
 	v.layer-- //NOW LAYER
 }
 
-func prettyBoolOp(v *PrettyPrinterVisitor, op string, left BooleanExpr, right BooleanExpr) {
+func prettyBoolOp(v *PrettyPrinterVisitor, op string, left BoolExpr, right BoolExpr) {
 	tabsNow := strings.Repeat("\t", v.layer)
 	tabs := tabsNow + "\t"
 	v.layer++ //NEXT LAYER

@@ -10,6 +10,7 @@ type StrExpr interface {
 	AcceptStr(StrExprVisitor)
 	Sprint() string
 	GetPos() Position
+	InstantiateStrExpr(int, int) InstStrExpr
 }
 
 type StrExprVisitor interface {
@@ -130,6 +131,7 @@ type StrComparison interface {
 	Sprint() string
 	AcceptStrComp(StrComparisonVisitor)
 	GetPos() Position
+	InstantiateStrCompExpr(int, int) InstStrComparison
 }
 
 type StrComparisonVisitor interface {
