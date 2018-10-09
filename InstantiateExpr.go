@@ -9,13 +9,12 @@ import (
 //Expression
 type InstExpr interface {
 	Sprint() string
-	//	Substitute(string, interface{})
+	Substitute(InstStreamExpr, InstExpr) InstExpr
 }
 type InstConstExpr struct { // implements Expr,NumExpr,BoolExpr
 	Name StreamName
 	Pos  Position
 }
-
 type InstLetExpr struct {
 	Name StreamName
 	Bind InstExpr
@@ -42,8 +41,13 @@ type InstStringExpr struct {
 //Stream
 type InstStreamExpr interface {
 	Sprint() string
+	Substitute(InstStreamExpr, InstExpr) InstExpr
+	SubstituteBool(InstStreamExpr, InstExpr) InstBoolExpr
+	SubstituteNum(InstStreamExpr, InstExpr) InstNumExpr
+	SubstituteStr(InstStreamExpr, InstExpr) InstStrExpr
+	GetName() StreamName
+	GetTick() int
 }
-
 type InstStreamFetchExpr struct { //implements StreamExpr
 	Name StreamName
 	Tick int
@@ -51,15 +55,20 @@ type InstStreamFetchExpr struct { //implements StreamExpr
 	//Pos     Position
 }
 
+func (this InstStreamFetchExpr) GetName() StreamName {
+	return this.Name
+}
+func (this InstStreamFetchExpr) GetTick() int {
+	return this.Tick
+}
+
 //Boolean
 type InstBoolExpr interface {
 	Sprint() string
-	//	Substitute(string, BoolExpr) //TruePredicate or FalsePredicate
+	SubstituteBool(InstStreamExpr, InstExpr) InstBoolExpr
 }
-
 type InstTruePredicate struct{ Pos Position }
 type InstFalsePredicate struct{ Pos Position }
-
 type InstNotPredicate struct {
 	Inner InstBoolExpr
 }
@@ -86,41 +95,37 @@ type InstStrComparisonPredicate struct {
 //Numeric
 type InstNumComparison interface {
 	Sprint() string
+	SubstituteNumComp(InstStreamExpr, InstExpr) InstNumComparison
 }
-
 type InstNumLess struct {
 	Left  InstNumExpr
 	Right InstNumExpr
 }
-
 type InstNumLessEq struct {
 	Left  InstNumExpr
 	Right InstNumExpr
 }
-
 type InstNumEq struct {
 	Left  InstNumExpr
 	Right InstNumExpr
 }
-
 type InstNumGreater struct {
 	Left  InstNumExpr
 	Right InstNumExpr
 }
-
 type InstNumGreaterEq struct {
 	Left  InstNumExpr
 	Right InstNumExpr
 }
-
 type InstNumNotEq struct {
 	Left  InstNumExpr
 	Right InstNumExpr
 }
+
 type InstNumExpr interface {
 	Sprint() string
+	SubstituteNum(InstStreamExpr, InstExpr) InstNumExpr
 }
-
 type InstIntLiteralExpr struct {
 	Num int
 	//	Pos Position
@@ -149,8 +154,8 @@ type InstNumMinusExpr struct {
 //String
 type InstStrExpr interface {
 	Sprint() string
+	SubstituteStr(InstStreamExpr, InstExpr) InstStrExpr
 }
-
 type InstStringLiteralExpr struct {
 	S string
 	//	Pos Position
@@ -159,78 +164,77 @@ type InstStrConcatExpr struct {
 	Left  InstStrExpr
 	Right InstStrExpr
 }
+
 type InstStrComparison interface {
 	Sprint() string
+	SubstituteStrComp(InstStreamExpr, InstExpr) InstStrComparison
 }
-
 type InstStrEqExpr struct {
 	Left  InstStrExpr
 	Right InstStrExpr
 }
 
-func (e ConstExpr) InstantiateExpr(tick, tlen int) InstExpr {
-	return InstConstExpr{e.Name, e.Pos}
+func (this ConstExpr) InstantiateExpr(tick, tlen int) InstExpr {
+	return InstConstExpr{this.Name, this.Pos}
 }
-func (e LetExpr) InstantiateExpr(tick, tlen int) InstExpr {
-	return InstLetExpr{e.Name, e.Bind.InstantiateExpr(tick, tlen), e.Body.InstantiateExpr(tick, tlen)}
+func (this LetExpr) InstantiateExpr(tick, tlen int) InstExpr {
+	return InstLetExpr{this.Name, this.Bind.InstantiateExpr(tick, tlen), this.Body.InstantiateExpr(tick, tlen)}
 }
-func (e IfThenElseExpr) InstantiateExpr(tick, tlen int) InstExpr {
-	return InstIfThenElseExpr{e.If.InstantiateExpr(tick, tlen), e.Then.InstantiateExpr(tick, tlen), e.Else.InstantiateExpr(tick, tlen)}
+func (this IfThenElseExpr) InstantiateExpr(tick, tlen int) InstExpr {
+	return InstIfThenElseExpr{this.If.InstantiateExpr(tick, tlen), this.Then.InstantiateExpr(tick, tlen), this.Else.InstantiateExpr(tick, tlen)}
 }
-func (e StreamOffsetExpr) InstantiateExpr(tick, tlen int) InstExpr { // expr = a[x|d] we will use the default value to infer the type
-	return e.SExpr.InstantiateStreamExpr(tick, tlen) //note it does not follow the pattern of the rest
+func (this StreamOffsetExpr) InstantiateExpr(tick, tlen int) InstExpr { // expr = a[x|d] we will use the default value to infer the type
+	return this.SExpr.InstantiateStreamExpr(tick, tlen) //note it does not follow the pattern of the rest
 }
-func (e BooleanExpr) InstantiateExpr(tick, tlen int) InstExpr {
-	return InstBooleanExpr{e.BExpr.InstantiateBoolExpr(tick, tlen)}
+func (this BooleanExpr) InstantiateExpr(tick, tlen int) InstExpr {
+	return InstBooleanExpr{this.BExpr.InstantiateBoolExpr(tick, tlen)}
 }
-
-func (e NumericExpr) InstantiateExpr(tick, tlen int) InstExpr {
-	return InstNumericExpr{e.NExpr.InstantiateNumExpr(tick, tlen)}
+func (this NumericExpr) InstantiateExpr(tick, tlen int) InstExpr {
+	return InstNumericExpr{this.NExpr.InstantiateNumExpr(tick, tlen)}
 }
-func (e StringExpr) InstantiateExpr(tick, tlen int) InstExpr {
-	return InstStringExpr{e.StExpr.InstantiateStrExpr(tick, tlen)}
+func (this StringExpr) InstantiateExpr(tick, tlen int) InstExpr {
+	return InstStringExpr{this.StExpr.InstantiateStrExpr(tick, tlen)}
 }
 
 //Boolean
-func (e TruePredicate) InstantiateBoolExpr(tick, tlen int) InstBoolExpr {
+func (this TruePredicate) InstantiateBoolExpr(tick, tlen int) InstBoolExpr {
 	return InstTruePredicate{}
 }
-func (e FalsePredicate) InstantiateBoolExpr(tick, tlen int) InstBoolExpr {
+func (this FalsePredicate) InstantiateBoolExpr(tick, tlen int) InstBoolExpr {
 	return InstFalsePredicate{}
 }
-func (e NotPredicate) InstantiateBoolExpr(tick, tlen int) InstBoolExpr {
-	return InstNotPredicate{e.Inner.InstantiateBoolExpr(tick, tlen)}
+func (this NotPredicate) InstantiateBoolExpr(tick, tlen int) InstBoolExpr {
+	return InstNotPredicate{this.Inner.InstantiateBoolExpr(tick, tlen)}
 }
-func (s StreamOffsetExpr) InstantiateBoolExpr(tick, tlen int) InstBoolExpr {
-	return InstStreamOffsetExpr{s.SExpr.InstantiateBoolStreamExpr(tick, tlen)}
+func (this StreamOffsetExpr) InstantiateBoolExpr(tick, tlen int) InstBoolExpr {
+	return this.SExpr.InstantiateBoolStreamExpr(tick, tlen)
 }
-func (s ConstExpr) InstantiateBoolExpr(tick, tlen int) InstBoolExpr {
-	return InstConstExpr{s.Name, s.Pos}
+func (this ConstExpr) InstantiateBoolExpr(tick, tlen int) InstBoolExpr {
+	return InstConstExpr{this.Name, this.Pos}
 }
-func (e AndPredicate) InstantiateBoolExpr(tick, tlen int) InstBoolExpr {
-	return InstAndPredicate{e.Left.InstantiateBoolExpr(tick, tlen), e.Right.InstantiateBoolExpr(tick, tlen)}
+func (this AndPredicate) InstantiateBoolExpr(tick, tlen int) InstBoolExpr {
+	return InstAndPredicate{this.Left.InstantiateBoolExpr(tick, tlen), this.Right.InstantiateBoolExpr(tick, tlen)}
+}
+func (this OrPredicate) InstantiateBoolExpr(tick, tlen int) InstBoolExpr {
+	return InstOrPredicate{this.Left.InstantiateBoolExpr(tick, tlen), this.Right.InstantiateBoolExpr(tick, tlen)}
 }
 
-func (e OrPredicate) InstantiateBoolExpr(tick, tlen int) InstBoolExpr {
-	return InstOrPredicate{e.Left.InstantiateBoolExpr(tick, tlen), e.Right.InstantiateBoolExpr(tick, tlen)}
-}
-
-/*func (e IfThenElsePredicate) InstantiateBoolExpr(tick, tlen int) InstBoolExpr {
-	return InstIfThenElsePredicate{e.If.InstantiateBoolExpr(tick, tlen), e.Then.InstantiateBoolExpr(tick, tlen), e.Else.InstantiateBoolExpr(tick, tlen)}
+/*func (this IfThenElsePredicate) InstantiateBoolExpr(tick, tlen int) InstBoolExpr {
+	return InstIfThenElsePredicate{this.If.InstantiateBoolExpr(tick, tlen), this.Then.InstantiateBoolExpr(tick, tlen), this.Else.InstantiateBoolExpr(tick, tlen)}
 }*/
-func (e NumComparisonPredicate) InstantiateBoolExpr(tick, tlen int) InstBoolExpr {
-	return InstNumComparisonPredicate{e.Comp.InstantiateNumCompExpr(tick, tlen)}
+func (this NumComparisonPredicate) InstantiateBoolExpr(tick, tlen int) InstBoolExpr {
+	return InstNumComparisonPredicate{this.Comp.InstantiateNumCompExpr(tick, tlen)}
 }
-func (e StrComparisonPredicate) InstantiateBoolExpr(tick, tlen int) InstBoolExpr {
-	return InstStrComparisonPredicate{e.Comp.InstantiateStrCompExpr(tick, tlen)}
+func (this StrComparisonPredicate) InstantiateBoolExpr(tick, tlen int) InstBoolExpr {
+	return InstStrComparisonPredicate{this.Comp.InstantiateStrCompExpr(tick, tlen)}
 }
 
 //Stream
-func (s StreamFetchExpr) InstantiateStreamExpr(tick, tlen int) InstExpr {
-	if s.Offset.val+tick < 0 || s.Offset.val+tick > tlen {
-		return convertToInstExpr(s.Default)
+func (this StreamFetchExpr) InstantiateStreamExpr(tick, tlen int) InstExpr {
+	if this.Offset.val+tick < 0 || this.Offset.val+tick > tlen {
+		return convertToInstExpr(this.Default)
 	}
-	r := InstStreamOffsetExpr{InstStreamFetchExpr{s.Name, s.Offset.val + tick}}
+	r := InstStreamOffsetExpr{InstStreamFetchExpr{this.Name, this.Offset.val + tick}}
 	//	fmt.Printf("Instantiated stream: %s for tick %d with tlen %d\n", r.Sprint(), tick, tlen)
 	return r
 }
@@ -253,30 +257,27 @@ func convertToInstExpr(d DefaultExpr) InstExpr {
 	return r
 
 }
-
-func (s StreamFetchExpr) InstantiateBoolStreamExpr(tick, tlen int) InstBoolExpr {
-	if s.Offset.val+tick < 0 || s.Offset.val+tick > tlen {
-		return convertToInstExpr(s.Default).(InstBoolExpr)
+func (this StreamFetchExpr) InstantiateBoolStreamExpr(tick, tlen int) InstBoolExpr {
+	if this.Offset.val+tick < 0 || this.Offset.val+tick > tlen {
+		return convertToInstExpr(this.Default).(InstBoolExpr)
 	}
-	r := InstStreamOffsetExpr{InstStreamFetchExpr{s.Name, s.Offset.val + tick}}
+	r := InstStreamOffsetExpr{InstStreamFetchExpr{this.Name, this.Offset.val + tick}}
 	//	fmt.Printf("Instantiated stream: %s for tick %d with tlen %d\n", r.Sprint(), tick, tlen)
 	return r
-
 }
-func (s StreamFetchExpr) InstantiateNumStreamExpr(tick, tlen int) InstNumExpr {
-	if s.Offset.val+tick < 0 || s.Offset.val+tick > tlen {
-		return convertToInstExpr(s.Default).(InstNumExpr)
+func (this StreamFetchExpr) InstantiateNumStreamExpr(tick, tlen int) InstNumExpr {
+	if this.Offset.val+tick < 0 || this.Offset.val+tick > tlen {
+		return convertToInstExpr(this.Default).(InstNumExpr)
 	}
-	r := InstStreamOffsetExpr{InstStreamFetchExpr{s.Name, s.Offset.val + tick}}
+	r := InstStreamOffsetExpr{InstStreamFetchExpr{this.Name, this.Offset.val + tick}}
 	//	fmt.Printf("Instantiated stream: %s for tick %d with tlen %d\n", r.Sprint(), tick, tlen)
 	return r
-
 }
-func (s StreamFetchExpr) InstantiateStrStreamExpr(tick, tlen int) InstStrExpr {
-	if s.Offset.val+tick < 0 || s.Offset.val+tick > tlen {
-		return convertToInstExpr(s.Default).(InstStrExpr)
+func (this StreamFetchExpr) InstantiateStrStreamExpr(tick, tlen int) InstStrExpr {
+	if this.Offset.val+tick < 0 || this.Offset.val+tick > tlen {
+		return convertToInstExpr(this.Default).(InstStrExpr)
 	}
-	r := InstStreamOffsetExpr{InstStreamFetchExpr{s.Name, s.Offset.val + tick}}
+	r := InstStreamOffsetExpr{InstStreamFetchExpr{this.Name, this.Offset.val + tick}}
 	//	fmt.Printf("Instantiated stream: %s for tick %d with tlen %d\n", r.Sprint(), tick, tlen)
 	return r
 }
@@ -319,11 +320,11 @@ func (this NumPlusExpr) InstantiateNumExpr(tick, tlen int) InstNumExpr {
 func (this NumMinusExpr) InstantiateNumExpr(tick, tlen int) InstNumExpr {
 	return InstNumMinusExpr{this.Left.InstantiateNumExpr(tick, tlen), this.Right.InstantiateNumExpr(tick, tlen)}
 }
-func (s StreamOffsetExpr) InstantiateNumExpr(tick, tlen int) InstNumExpr {
-	return InstStreamOffsetExpr{s.SExpr.InstantiateNumStreamExpr(tick, tlen)}
+func (this StreamOffsetExpr) InstantiateNumExpr(tick, tlen int) InstNumExpr {
+	return this.SExpr.InstantiateNumStreamExpr(tick, tlen)
 }
-func (s ConstExpr) InstantiateNumExpr(tick, tlen int) InstNumExpr {
-	return InstConstExpr{s.Name, s.Pos}
+func (this ConstExpr) InstantiateNumExpr(tick, tlen int) InstNumExpr {
+	return InstConstExpr{this.Name, this.Pos}
 }
 
 //String
@@ -334,12 +335,11 @@ func (this StrConcatExpr) InstantiateStrExpr(tick, tlen int) InstStrExpr {
 	return InstStrConcatExpr{this.Left.InstantiateStrExpr(tick, tlen), this.Right.InstantiateStrExpr(tick, tlen)}
 }
 func (this StreamOffsetExpr) InstantiateStrExpr(tick, tlen int) InstStrExpr {
-	return InstStreamOffsetExpr{this.SExpr.InstantiateStrStreamExpr(tick, tlen)}
+	return this.SExpr.InstantiateStrStreamExpr(tick, tlen)
 }
 func (this ConstExpr) InstantiateStrExpr(tick, tlen int) InstStrExpr {
 	return InstConstExpr{this.Name, this.Pos}
 }
-
 func (this StrEqExpr) InstantiateStrCompExpr(tick, tlen int) InstStrComparison {
 	return InstStrEqExpr{this.Left.InstantiateStrExpr(tick, tlen), this.Right.InstantiateStrExpr(tick, tlen)}
 }
@@ -349,7 +349,6 @@ func (this StrEqExpr) InstantiateStrCompExpr(tick, tlen int) InstStrComparison {
 func (this InstConstExpr) Sprint() string {
 	return string(this.Name)
 }
-
 func (this InstLetExpr) Sprint() string {
 	bind := this.Bind.Sprint()
 	body := this.Bind.Sprint()
@@ -375,31 +374,31 @@ func (this InstStringExpr) Sprint() string {
 }
 
 //Stream
-func (e InstStreamFetchExpr) Sprint() string {
-	return fmt.Sprintf("%s[%d]", e.Name.Sprint(), e.Tick)
+func (this InstStreamFetchExpr) Sprint() string {
+	return fmt.Sprintf("%s[%d]", this.Name.Sprint(), this.Tick)
 }
 
 //predicates
-func (p InstAndPredicate) Sprint() string {
-	return fmt.Sprintf("(%s) /\\ (%s)", p.Left.Sprint(), p.Right.Sprint())
+func (this InstAndPredicate) Sprint() string {
+	return fmt.Sprintf("(%s) /\\ (%s)", this.Left.Sprint(), this.Right.Sprint())
 }
-func (p InstOrPredicate) Sprint() string {
-	return fmt.Sprintf("(%s) \\/  (%s)", p.Left.Sprint(), p.Right.Sprint())
+func (this InstOrPredicate) Sprint() string {
+	return fmt.Sprintf("(%s) \\/  (%s)", this.Left.Sprint(), this.Right.Sprint())
 }
-func (p InstNotPredicate) Sprint() string {
-	return fmt.Sprintf("~ (%s)", p.Inner.Sprint())
+func (this InstNotPredicate) Sprint() string {
+	return fmt.Sprintf("~ (%s)", this.Inner.Sprint())
 }
-func (p InstTruePredicate) Sprint() string {
+func (this InstTruePredicate) Sprint() string {
 	return fmt.Sprintf("true")
 }
-func (p InstFalsePredicate) Sprint() string {
+func (this InstFalsePredicate) Sprint() string {
 	return fmt.Sprintf("false")
 }
-func (p InstNumComparisonPredicate) Sprint() string {
-	return p.Comp.Sprint()
+func (this InstNumComparisonPredicate) Sprint() string {
+	return this.Comp.Sprint()
 }
-func (p InstStrComparisonPredicate) Sprint() string {
-	return p.Comp.Sprint()
+func (this InstStrComparisonPredicate) Sprint() string {
+	return this.Comp.Sprint()
 }
 
 //numeric
@@ -422,23 +421,23 @@ func (this InstNumEq) Sprint() string {
 	return fmt.Sprintf("(%s) = (%s)", this.Left.Sprint(), this.Right.Sprint())
 }
 
-func (e InstNumMulExpr) Sprint() string {
-	return fmt.Sprintf("(%s)%s(%s)", e.Left.Sprint(), "*", e.Right.Sprint())
+func (this InstNumMulExpr) Sprint() string {
+	return fmt.Sprintf("(%s)%s(%s)", this.Left.Sprint(), "*", this.Right.Sprint())
 }
-func (e InstNumDivExpr) Sprint() string {
-	return fmt.Sprintf("(%s)%s(%s)", e.Left.Sprint(), "/", e.Right.Sprint())
+func (this InstNumDivExpr) Sprint() string {
+	return fmt.Sprintf("(%s)%s(%s)", this.Left.Sprint(), "/", this.Right.Sprint())
 }
-func (e InstNumPlusExpr) Sprint() string {
-	return fmt.Sprintf("(%s)%s(%s)", e.Left.Sprint(), "+", e.Right.Sprint())
+func (this InstNumPlusExpr) Sprint() string {
+	return fmt.Sprintf("(%s)%s(%s)", this.Left.Sprint(), "+", this.Right.Sprint())
 }
-func (e InstNumMinusExpr) Sprint() string {
-	return fmt.Sprintf("(%s)%s(%s)", e.Left.Sprint(), "-", e.Right.Sprint())
+func (this InstNumMinusExpr) Sprint() string {
+	return fmt.Sprintf("(%s)%s(%s)", this.Left.Sprint(), "-", this.Right.Sprint())
 }
-func (e InstIntLiteralExpr) Sprint() string {
-	return strconv.Itoa(e.Num)
+func (this InstIntLiteralExpr) Sprint() string {
+	return strconv.Itoa(this.Num)
 }
-func (e InstFloatLiteralExpr) Sprint() string {
-	return strconv.FormatFloat(float64(e.Num), 'f', 4, 32)
+func (this InstFloatLiteralExpr) Sprint() string {
+	return strconv.FormatFloat(float64(this.Num), 'f', 4, 32)
 }
 
 //string
@@ -448,7 +447,167 @@ func (this InstStringLiteralExpr) Sprint() string {
 func (this InstStrConcatExpr) Sprint() string {
 	return fmt.Sprintf("(%s) strConcat (%s)", this.Left.Sprint(), this.Right.Sprint())
 }
-
 func (this InstStrEqExpr) Sprint() string {
 	return fmt.Sprintf("(%s) strEq (%s)", this.Left.Sprint(), this.Right.Sprint())
+}
+
+//Substitute
+func (this InstConstExpr) Substitute(s InstStreamExpr, v InstExpr) InstExpr {
+	return this
+}
+func (this InstLetExpr) Substitute(s InstStreamExpr, v InstExpr) InstExpr {
+	return InstLetExpr{this.Name, this.Bind.Substitute(s, v), this.Body.Substitute(s, v)}
+}
+func (this InstIfThenElseExpr) Substitute(s InstStreamExpr, v InstExpr) InstExpr {
+	return InstIfThenElseExpr{this.If.Substitute(s, v), this.Then.Substitute(s, v), this.Else.Substitute(s, v)}
+}
+func (this InstStreamOffsetExpr) Substitute(s InstStreamExpr, v InstExpr) InstExpr {
+	return this.SExpr.Substitute(s, v) //note it does not follow the pattern of the rest
+}
+func (this InstBooleanExpr) Substitute(s InstStreamExpr, v InstExpr) InstExpr {
+	return InstBooleanExpr{this.BExpr.SubstituteBool(s, v)}
+}
+func (this InstNumericExpr) Substitute(s InstStreamExpr, v InstExpr) InstExpr {
+	return InstNumericExpr{this.NExpr.SubstituteNum(s, v)}
+}
+func (this InstStringExpr) Substitute(s InstStreamExpr, v InstExpr) InstExpr {
+	return InstStringExpr{this.StExpr.SubstituteStr(s, v)}
+}
+
+//Boolean
+func (this InstTruePredicate) SubstituteBool(s InstStreamExpr, v InstExpr) InstBoolExpr {
+	return this
+}
+func (this InstFalsePredicate) SubstituteBool(s InstStreamExpr, v InstExpr) InstBoolExpr {
+	return this
+}
+func (this InstNotPredicate) SubstituteBool(s InstStreamExpr, v InstExpr) InstBoolExpr {
+	return InstNotPredicate{this.Inner.SubstituteBool(s, v)}
+}
+func (this InstStreamOffsetExpr) SubstituteBool(s InstStreamExpr, v InstExpr) InstBoolExpr {
+	return this.SExpr.SubstituteBool(s, v)
+}
+func (this InstConstExpr) SubstituteBool(s InstStreamExpr, v InstExpr) InstBoolExpr {
+	return this
+}
+func (this InstAndPredicate) SubstituteBool(s InstStreamExpr, v InstExpr) InstBoolExpr {
+	return InstAndPredicate{this.Left.SubstituteBool(s, v), this.Right.SubstituteBool(s, v)}
+}
+func (this InstOrPredicate) SubstituteBool(s InstStreamExpr, v InstExpr) InstBoolExpr {
+	return InstOrPredicate{this.Left.SubstituteBool(s, v), this.Right.SubstituteBool(s, v)}
+}
+
+/*func (this InstIfThenElsePredicate) InstantiateBoolExpr(tick, tlen int) InstBoolExpr {
+	return InstIfThenElsePredicate{this.If.Substitute(s, v), this.Then.Substitute(s, v), this.Else.Substitute(s, v)}
+}*/
+func (this InstNumComparisonPredicate) SubstituteBool(s InstStreamExpr, v InstExpr) InstBoolExpr {
+	return InstNumComparisonPredicate{this.Comp.SubstituteNumComp(s, v)}
+}
+func (this InstStrComparisonPredicate) SubstituteBool(s InstStreamExpr, v InstExpr) InstBoolExpr {
+	return InstStrComparisonPredicate{this.Comp.SubstituteStrComp(s, v)}
+}
+
+//Stream
+func (this InstStreamFetchExpr) Substitute(s InstStreamExpr, v InstExpr) InstExpr {
+	if s.GetName() == this.Name && this.Tick == s.GetTick() {
+		return v
+	}
+	return this
+}
+func (this InstStreamFetchExpr) SubstituteBool(s InstStreamExpr, v InstExpr) InstBoolExpr {
+	if s.GetName() == this.Name && this.Tick == s.GetTick() {
+		return v.(InstBoolExpr)
+	}
+	return this
+}
+func (this InstStreamFetchExpr) SubstituteNum(s InstStreamExpr, v InstExpr) InstNumExpr {
+	if s.GetName() == this.Name && this.Tick == s.GetTick() {
+		return v.(InstNumExpr)
+	}
+	return this
+}
+func (this InstStreamFetchExpr) SubstituteStr(s InstStreamExpr, v InstExpr) InstStrExpr {
+	if s.GetName() == this.Name && this.Tick == s.GetTick() {
+		return v.(InstStrExpr)
+	}
+	return this
+}
+
+//Num
+func (this InstNumLess) SubstituteNumComp(s InstStreamExpr, v InstExpr) InstNumComparison {
+	return InstNumLess{this.Left.SubstituteNum(s, v), this.Right.SubstituteNum(s, v)}
+}
+func (this InstNumLessEq) SubstituteNumComp(s InstStreamExpr, v InstExpr) InstNumComparison {
+	return InstNumLessEq{this.Left.SubstituteNum(s, v), this.Right.SubstituteNum(s, v)}
+}
+func (this InstNumGreater) SubstituteNumComp(s InstStreamExpr, v InstExpr) InstNumComparison {
+	return InstNumGreater{this.Left.SubstituteNum(s, v), this.Right.SubstituteNum(s, v)}
+}
+func (this InstNumGreaterEq) SubstituteNumComp(s InstStreamExpr, v InstExpr) InstNumComparison {
+	return InstNumGreaterEq{this.Left.SubstituteNum(s, v), this.Right.SubstituteNum(s, v)}
+}
+func (this InstNumEq) SubstituteNumComp(s InstStreamExpr, v InstExpr) InstNumComparison {
+	return InstNumEq{this.Left.SubstituteNum(s, v), this.Right.SubstituteNum(s, v)}
+}
+func (this InstNumNotEq) SubstituteNumComp(s InstStreamExpr, v InstExpr) InstNumComparison {
+	return InstNumNotEq{this.Left.SubstituteNum(s, v), this.Right.SubstituteNum(s, v)}
+}
+
+func (this InstIntLiteralExpr) SubstituteNum(s InstStreamExpr, v InstExpr) InstNumExpr {
+	return this
+}
+func (this InstFloatLiteralExpr) SubstituteNum(s InstStreamExpr, v InstExpr) InstNumExpr {
+	return this
+}
+func (this InstNumMulExpr) SubstituteNum(s InstStreamExpr, v InstExpr) InstNumExpr {
+	return InstNumMulExpr{this.Left.SubstituteNum(s, v), this.Right.SubstituteNum(s, v)}
+}
+func (this InstNumDivExpr) SubstituteNum(s InstStreamExpr, v InstExpr) InstNumExpr {
+	return InstNumDivExpr{this.Left.SubstituteNum(s, v), this.Right.SubstituteNum(s, v)}
+}
+func (this InstNumPlusExpr) SubstituteNum(s InstStreamExpr, v InstExpr) InstNumExpr {
+	return InstNumPlusExpr{this.Left.SubstituteNum(s, v), this.Right.SubstituteNum(s, v)}
+}
+func (this InstNumMinusExpr) SubstituteNum(s InstStreamExpr, v InstExpr) InstNumExpr {
+	return InstNumMinusExpr{this.Left.SubstituteNum(s, v), this.Right.SubstituteNum(s, v)}
+}
+func (this InstStreamOffsetExpr) SubstituteNum(s InstStreamExpr, v InstExpr) InstNumExpr {
+	return this.SExpr.SubstituteNum(s, v)
+}
+func (this InstConstExpr) SubstituteNum(s InstStreamExpr, v InstExpr) InstNumExpr {
+	return this
+}
+
+//String
+func (this InstStringLiteralExpr) SubstituteStr(s InstStreamExpr, v InstExpr) InstStrExpr {
+	return this
+}
+func (this InstStrConcatExpr) SubstituteStr(s InstStreamExpr, v InstExpr) InstStrExpr {
+	return InstStrConcatExpr{this.Left.SubstituteStr(s, v), this.Right.SubstituteStr(s, v)}
+}
+func (this InstStreamOffsetExpr) SubstituteStr(s InstStreamExpr, v InstExpr) InstStrExpr {
+	return this.SExpr.SubstituteStr(s, v)
+}
+func (this InstConstExpr) SubstituteStr(s InstStreamExpr, v InstExpr) InstStrExpr {
+	return this
+}
+func (this InstStrEqExpr) SubstituteStrComp(s InstStreamExpr, v InstExpr) InstStrComparison {
+	return InstStrEqExpr{this.Left.SubstituteStr(s, v), this.Right.SubstituteStr(s, v)}
+}
+
+//Literals need to implement InstExpr to compile, implementation of Substitute (should not be needed at runtime)
+func (this InstTruePredicate) Substitute(s InstStreamExpr, v InstExpr) InstExpr {
+	return this
+}
+func (this InstFalsePredicate) Substitute(s InstStreamExpr, v InstExpr) InstExpr {
+	return this
+}
+func (this InstIntLiteralExpr) Substitute(s InstStreamExpr, v InstExpr) InstExpr {
+	return this
+}
+func (this InstFloatLiteralExpr) Substitute(s InstStreamExpr, v InstExpr) InstExpr {
+	return this
+}
+func (this InstStringLiteralExpr) Substitute(s InstStreamExpr, v InstExpr) InstExpr {
+	return this
 }
