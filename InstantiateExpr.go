@@ -10,6 +10,7 @@ import (
 type InstExpr interface {
 	Sprint() string
 	Substitute(InstStreamExpr, InstExpr) InstExpr
+	Simplify() InstExpr
 }
 type InstConstExpr struct { // implements Expr,NumExpr,BoolExpr
 	Name StreamName
@@ -47,6 +48,10 @@ type InstStreamExpr interface {
 	SubstituteStr(InstStreamExpr, InstExpr) InstStrExpr
 	GetName() StreamName
 	GetTick() int
+	//Simplify() InstExpr THESE WILL NOT BE USED AS AN INSTANTIATED STREAM CANNOT BE SIMPLIFIED
+	//SimplifyBool() InstBoolExpr
+	//SimplifyNum() InstNumExpr
+	//SimplifyStr() InstStrExpr
 }
 type InstStreamFetchExpr struct { //implements StreamExpr
 	Name StreamName
@@ -66,6 +71,7 @@ func (this InstStreamFetchExpr) GetTick() int {
 type InstBoolExpr interface {
 	Sprint() string
 	SubstituteBool(InstStreamExpr, InstExpr) InstBoolExpr
+	SimplifyBool() InstBoolExpr
 }
 type InstTruePredicate struct{ Pos Position }
 type InstFalsePredicate struct{ Pos Position }
@@ -96,6 +102,7 @@ type InstStrComparisonPredicate struct {
 type InstNumComparison interface {
 	Sprint() string
 	SubstituteNumComp(InstStreamExpr, InstExpr) InstNumComparison
+	SimplifyNumComp() InstBoolExpr
 }
 type InstNumLess struct {
 	Left  InstNumExpr
@@ -125,6 +132,7 @@ type InstNumNotEq struct {
 type InstNumExpr interface {
 	Sprint() string
 	SubstituteNum(InstStreamExpr, InstExpr) InstNumExpr
+	SimplifyNum() InstNumExpr
 }
 type InstIntLiteralExpr struct {
 	Num int
@@ -155,6 +163,7 @@ type InstNumMinusExpr struct {
 type InstStrExpr interface {
 	Sprint() string
 	SubstituteStr(InstStreamExpr, InstExpr) InstStrExpr
+	SimplifyStr() InstStrExpr
 }
 type InstStringLiteralExpr struct {
 	S string
@@ -168,6 +177,7 @@ type InstStrConcatExpr struct {
 type InstStrComparison interface {
 	Sprint() string
 	SubstituteStrComp(InstStreamExpr, InstExpr) InstStrComparison
+	SimplifyStrComp() InstBoolExpr
 }
 type InstStrEqExpr struct {
 	Left  InstStrExpr
@@ -512,25 +522,25 @@ func (this InstStreamFetchExpr) Substitute(s InstStreamExpr, v InstExpr) InstExp
 	if s.GetName() == this.Name && this.Tick == s.GetTick() {
 		return v
 	}
-	return this
+	return InstStreamOffsetExpr{this}
 }
 func (this InstStreamFetchExpr) SubstituteBool(s InstStreamExpr, v InstExpr) InstBoolExpr {
 	if s.GetName() == this.Name && this.Tick == s.GetTick() {
 		return v.(InstBoolExpr)
 	}
-	return this
+	return InstStreamOffsetExpr{this}
 }
 func (this InstStreamFetchExpr) SubstituteNum(s InstStreamExpr, v InstExpr) InstNumExpr {
 	if s.GetName() == this.Name && this.Tick == s.GetTick() {
 		return v.(InstNumExpr)
 	}
-	return this
+	return InstStreamOffsetExpr{this}
 }
 func (this InstStreamFetchExpr) SubstituteStr(s InstStreamExpr, v InstExpr) InstStrExpr {
 	if s.GetName() == this.Name && this.Tick == s.GetTick() {
 		return v.(InstStrExpr)
 	}
-	return this
+	return InstStreamOffsetExpr{this}
 }
 
 //Num
