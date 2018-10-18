@@ -6,13 +6,13 @@ import (
 )
 
 /*Graph represented as a map*/
-type DepGraphAdj map[string][]Adj
-type Reachable map[string](map[string]struct{}) //will contain if there is a path (of any length) from the first to the second
+type DepGraphAdj map[StreamName][]Adj
+type Reachable map[StreamName](map[StreamName]struct{}) //will contain if there is a path (of any length) from the first to the second
 
 type Adj struct {
-	Src    string
+	Src    StreamName
 	Weight int
-	Dest   string
+	Dest   StreamName
 }
 
 func (a Adj) Sprint() string {
@@ -75,7 +75,7 @@ func (c ClasifiedPathsAdj) Sprint() string {
 func SpecToGraph(spec *Spec) DepGraphAdj {
 	sToGVisitor := SpecToGraphVisitor{DepGraphAdj{}, ""}
 	for _, v := range spec.Output {
-		sToGVisitor.s = v.Name.Sprint()
+		sToGVisitor.s = v.Name
 		v.Expr.Accept(&sToGVisitor)
 	}
 	return sToGVisitor.g
@@ -101,7 +101,7 @@ func GetReachableAdj(g DepGraphAdj) (Reachable, []error) {
 	reach := make(Reachable, 0)
 	for node, pending := range g {
 		//fmt.Printf("Node:%s\n", node)
-		reach[node] = make(map[string]struct{})
+		reach[node] = make(map[StreamName]struct{})
 		i := 0
 		for len(pending) != 0 /*&& i < 5*/ { // cap(pending)
 			//fmt.Printf("New it %d pending:%v\n", i, pending)
@@ -122,7 +122,7 @@ func GetReachableAdj(g DepGraphAdj) (Reachable, []error) {
 }
 
 /*will filter all those adjacencies of a node that lead to an already reachable node*/
-func filter(l []Adj, reachable map[string]struct{}) []Adj {
+func filter(l []Adj, reachable map[StreamName]struct{}) []Adj {
 	//fmt.Printf("Candidates for appending :%v\n", l)
 	for _, a := range l {
 		if _, ok := reachable[a.Dest]; ok { //if present we drop the element
@@ -132,7 +132,7 @@ func filter(l []Adj, reachable map[string]struct{}) []Adj {
 	return l
 }
 
-func visitedDest(path []Adj, node string) bool {
+func visitedDest(path []Adj, node StreamName) bool {
 	//fmt.Printf("path %v, node %s", path, node)
 	is := false
 	for i := 0; i < len(path) && !is; i++ {
@@ -173,7 +173,7 @@ func SimpleCyclesAdj(g DepGraphAdj, r Reachable) ([]PathAdj, []error) {
 	loops := make([]PathAdj, 0)
 	for src, _ := range g {
 		if _, ok := r[src][src]; ok { //only if the node is reachable from itself we look for simple cycles
-			loops = append(loops, visitNodeAdj(g, src, src, PathAdj{0, []Adj{}})...) //visitedNodes is a Set of strings)
+			loops = append(loops, visitNodeAdj(g, src, src, PathAdj{0, []Adj{}})...) //visitedNodes is a Set of StreamNames)
 		}
 	}
 	return loops, []error{}
@@ -181,7 +181,7 @@ func SimpleCyclesAdj(g DepGraphAdj, r Reachable) ([]PathAdj, []error) {
 
 //IMPORTANT MAPS & SLICES in GO are pointers, so as they are modified down in the recursion when going up, they are changed
 /*Expands the adjacencies of cur, and then searches for loops on them updating the path*/
-func visitNodeAdj(g DepGraphAdj, src, cur_node string, path PathAdj) []PathAdj {
+func visitNodeAdj(g DepGraphAdj, src, cur_node StreamName, path PathAdj) []PathAdj {
 	//fmt.Printf("I'm in node :%s\n", cur_node)
 	pending := g[cur_node] // :: Adj
 	//fmt.Printf("pending:%s\n", SprintAdjs(pending))
@@ -196,7 +196,7 @@ func visitNodeAdj(g DepGraphAdj, src, cur_node string, path PathAdj) []PathAdj {
 
 //cur will always be an adjacency of src to a child in the exploration path
 //decides if the adj takes to src, then we found a loop, othw it takes it and will continue exploring the node cur.Dest
-func decideAdj(g DepGraphAdj, src string, cur Adj, path PathAdj) []PathAdj {
+func decideAdj(g DepGraphAdj, src StreamName, cur Adj, path PathAdj) []PathAdj {
 	//fmt.Printf("Deciding adj :%s\n", cur.Sprint())
 	loops := make([]PathAdj, 0)
 	if shouldVisit(cur, path) { //only if not already visited we visit, IMPORTANT: every node may appear in the path just once!!!
@@ -221,8 +221,8 @@ func shouldVisit(cur Adj, path PathAdj) bool {
 	return !visitedDest(path.path, cur.Dest)
 }
 
-func CreateCycleMap(cycles []PathAdj) map[string]ClasifiedPathsAdj {
-	res := make(map[string]ClasifiedPathsAdj)
+func CreateCycleMap(cycles []PathAdj) map[StreamName]ClasifiedPathsAdj {
+	res := make(map[StreamName]ClasifiedPathsAdj)
 	for _, p := range cycles {
 		//fmt.Printf("Path %v, res = %v\n", p, res)
 		src := p.path[0].Src
@@ -272,7 +272,7 @@ func appendPath(cpaths *ClasifiedPathsAdj, p PathAdj) ClasifiedPathsAdj {
 	return cpaths
 }*/
 
-func IsWF(m map[string]ClasifiedPathsAdj) []error {
+func IsWF(m map[StreamName]ClasifiedPathsAdj) []error {
 	err := make([]error, 0)
 	for stream, cycles := range m {
 		if len(cycles.zeros) != 0 {
@@ -286,7 +286,7 @@ func IsWF(m map[string]ClasifiedPathsAdj) []error {
 	return err
 }
 
-func checkComplexCycles(stream string, cycles ClasifiedPathsAdj, m map[string]ClasifiedPathsAdj) []error {
+func checkComplexCycles(stream StreamName, cycles ClasifiedPathsAdj, m map[StreamName]ClasifiedPathsAdj) []error {
 	err := make([]error, 0)
 	for _, n := range cycles.negs {
 		err = append(err, complexCycle(stream, n, m)...)
@@ -300,7 +300,7 @@ func checkComplexCycles(stream string, cycles ClasifiedPathsAdj, m map[string]Cl
 	return err
 }
 
-func complexCycle(stream string, c PathAdj, m map[string]ClasifiedPathsAdj) []error {
+func complexCycle(stream StreamName, c PathAdj, m map[StreamName]ClasifiedPathsAdj) []error {
 	err := make([]error, 0)
 	for _, adj := range c.path {
 		node := adj.Dest

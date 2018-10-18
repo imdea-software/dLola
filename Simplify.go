@@ -1,20 +1,30 @@
 package dLola
 
-/*import (
-	"errors"
+import (
+	//	"errors"
 	"fmt"
-	"strconv"
-)*/
+	//	"strconv"
+)
+
+func SimplifyExpr(exp InstExpr) InstExpr {
+	expSimpl := true
+	for expSimpl { //while something in the expression get simplified try to simplify further
+		exp, expSimpl = exp.Simplify()
+	}
+	return exp
+}
 
 //Simplify
-func (this InstConstExpr) Simplify() InstExpr {
-	return this
+func (this InstConstExpr) Simplify() (InstExpr, bool) {
+	return this, false
 }
-func (this InstLetExpr) Simplify() InstExpr {
-	return InstLetExpr{this.Name, this.Bind.Simplify(), this.Body.Simplify()}
+func (this InstLetExpr) Simplify() (InstExpr, bool) {
+	bind, simplbind := this.Bind.Simplify()
+	body, simplbody := this.Body.Simplify()
+	return InstLetExpr{this.Name, bind, body}, simplbind || simplbody
 }
-func (this InstIfThenElseExpr) Simplify() InstExpr {
-	i := this.If.Simplify()
+func (this InstIfThenElseExpr) Simplify() (InstExpr, bool) {
+	i, _ := this.If.Simplify()
 	_, tbranch := i.(InstTruePredicate)
 	_, fbranch := i.(InstFalsePredicate)
 	if tbranch {
@@ -24,202 +34,248 @@ func (this InstIfThenElseExpr) Simplify() InstExpr {
 			return this.Else.Simplify()
 		}
 	}
-	return InstIfThenElseExpr{i, this.Then.Simplify(), this.Else.Simplify()}
+	then, simplthen := this.Then.Simplify()
+	elsse, simplelsse := this.Else.Simplify()
+	return InstIfThenElseExpr{i, then, elsse}, simplthen || simplelsse
 }
-func (this InstStreamOffsetExpr) Simplify() InstExpr {
-	return this //note it is not the same pattern as with Substitute
+func (this InstStreamOffsetExpr) Simplify() (InstExpr, bool) {
+	return this, false //note it is not the same pattern as with Substitute
 }
-func (this InstBooleanExpr) Simplify() InstExpr {
-	return InstBooleanExpr{this.BExpr.SimplifyBool()}
+func (this InstBooleanExpr) Simplify() (InstExpr, bool) {
+	b, simpl := this.BExpr.SimplifyBool()
+	return InstBooleanExpr{b}, simpl
 }
-func (this InstNumericExpr) Simplify() InstExpr {
-	return InstNumericExpr{this.NExpr.SimplifyNum()}
+func (this InstNumericExpr) Simplify() (InstExpr, bool) {
+	fmt.Printf("Simplifying Numeric expression: %s", this.Sprint())
+	n, simpl := this.NExpr.SimplifyNum()
+	switch c := n.(type) {
+	case InstIntLiteralExpr:
+		return c, false
+	case InstFloatLiteralExpr:
+		return c, false
+	}
+	return InstNumericExpr{n}, simpl
 }
-func (this InstStringExpr) Simplify() InstExpr {
-	return InstStringExpr{this.StExpr.SimplifyStr()}
+func (this InstStringExpr) Simplify() (InstExpr, bool) {
+	s, simpl := this.StExpr.SimplifyStr()
+	if c, ok := s.(InstStringLiteralExpr); ok {
+		return c, simpl
+	}
+	return InstStringExpr{s}, simpl
 }
 
 //Boolean
-func (this InstTruePredicate) SimplifyBool() InstBoolExpr {
-	return this
+func (this InstTruePredicate) SimplifyBool() (InstBoolExpr, bool) {
+	return this, false
 }
-func (this InstFalsePredicate) SimplifyBool() InstBoolExpr {
-	return this
+func (this InstFalsePredicate) SimplifyBool() (InstBoolExpr, bool) {
+	return this, false
 }
-func (this InstNotPredicate) SimplifyBool() InstBoolExpr {
+func (this InstNotPredicate) SimplifyBool() (InstBoolExpr, bool) {
 	if _, t := this.Inner.(InstTruePredicate); t {
-		return InstFalsePredicate{}
+		return InstFalsePredicate{}, true
 	}
 	if _, f := this.Inner.(InstFalsePredicate); f {
-		return InstTruePredicate{}
+		return InstTruePredicate{}, true
 	}
-	return InstNotPredicate{this.Inner.SimplifyBool()}
+	n, simpl := this.Inner.SimplifyBool()
+	return InstNotPredicate{n}, simpl
 }
-func (this InstStreamOffsetExpr) SimplifyBool() InstBoolExpr {
-	return this //note it is not the same pattern as with Substitute
+func (this InstStreamOffsetExpr) SimplifyBool() (InstBoolExpr, bool) {
+	return this, false //note it is not the same pattern as with Substitute
 }
-func (this InstConstExpr) SimplifyBool() InstBoolExpr {
-	return this
+func (this InstConstExpr) SimplifyBool() (InstBoolExpr, bool) {
+	return this, false
 }
-func (this InstAndPredicate) SimplifyBool() InstBoolExpr {
+func (this InstAndPredicate) SimplifyBool() (InstBoolExpr, bool) {
 	if _, f := this.Left.(InstFalsePredicate); f {
-		return InstFalsePredicate{}
+		return InstFalsePredicate{}, true
 	}
 	if _, t := this.Left.(InstTruePredicate); t {
 		return this.Right.SimplifyBool()
 	}
 	if _, t := this.Right.(InstFalsePredicate); t {
-		return InstFalsePredicate{}
+		return InstFalsePredicate{}, true
 	}
 	if _, t := this.Right.(InstTruePredicate); t {
 		return this.Left.SimplifyBool()
 	}
-	return InstAndPredicate{this.Left.SimplifyBool(), this.Right.SimplifyBool()}
+	l, lsimpl := this.Left.SimplifyBool()
+	r, rsimpl := this.Right.SimplifyBool()
+	return InstAndPredicate{l, r}, lsimpl || rsimpl
 }
-func (this InstOrPredicate) SimplifyBool() InstBoolExpr {
+func (this InstOrPredicate) SimplifyBool() (InstBoolExpr, bool) {
 	if _, f := this.Left.(InstFalsePredicate); f {
 		return this.Right.SimplifyBool()
 	}
 	if _, t := this.Left.(InstTruePredicate); t {
-		return InstTruePredicate{}
+		return InstTruePredicate{}, true
 	}
 	if _, t := this.Right.(InstFalsePredicate); t {
 		return this.Left.SimplifyBool()
 	}
 	if _, t := this.Right.(InstTruePredicate); t {
-		return InstTruePredicate{}
+		return InstTruePredicate{}, true
 	}
-	return InstOrPredicate{this.Left.SimplifyBool(), this.Right.SimplifyBool()}
+	l, lsimpl := this.Left.SimplifyBool()
+	r, rsimpl := this.Right.SimplifyBool()
+	return InstOrPredicate{l, r}, lsimpl || rsimpl
+
 }
 
 /*func (this InstIfThenElsePredicate) InstantiateBoolExpr(tick, tlen int) InstBoolExpr {
 	return InstIfThenElsePredicate{this.If.Simplify(), this.Then.Simplify(), this.Else.Simplify()}
 }*/
-func (this InstNumComparisonPredicate) SimplifyBool() InstBoolExpr {
+func (this InstNumComparisonPredicate) SimplifyBool() (InstBoolExpr, bool) {
 	return this.Comp.SimplifyNumComp() //does not follow same pattern than Substitute
 }
-func (this InstStrComparisonPredicate) SimplifyBool() InstBoolExpr {
+func (this InstStrComparisonPredicate) SimplifyBool() (InstBoolExpr, bool) {
 	return this.Comp.SimplifyStrComp()
 }
 
 //Stream
 
 //Num
-func (this InstNumLess) SimplifyNumComp() InstBoolExpr {
+func (this InstNumLess) SimplifyNumComp() (InstBoolExpr, bool) {
 	if v, ok := operateComp(this.Left, this.Right, lessInt, lessFloat); ok {
-		return v
+		return v, true
 	}
-	return InstNumComparisonPredicate{InstNumLess{this.Left.SimplifyNum(), this.Right.SimplifyNum()}}
+	l, lsimpl := this.Left.SimplifyNum()
+	r, rsimpl := this.Right.SimplifyNum()
+	return InstNumComparisonPredicate{InstNumLess{l, r}}, lsimpl || rsimpl
 }
-func (this InstNumLessEq) SimplifyNumComp() InstBoolExpr {
+func (this InstNumLessEq) SimplifyNumComp() (InstBoolExpr, bool) {
 	if v, ok := operateComp(this.Left, this.Right, lesseqInt, lesseqFloat); ok {
-		return v
+		return v, true
 	}
-	return InstNumComparisonPredicate{InstNumLessEq{this.Left.SimplifyNum(), this.Right.SimplifyNum()}}
+	l, lsimpl := this.Left.SimplifyNum()
+	r, rsimpl := this.Right.SimplifyNum()
+	return InstNumComparisonPredicate{InstNumLessEq{l, r}}, lsimpl || rsimpl
 }
-func (this InstNumGreater) SimplifyNumComp() InstBoolExpr {
+func (this InstNumGreater) SimplifyNumComp() (InstBoolExpr, bool) {
 	if v, ok := operateComp(this.Left, this.Right, greaterInt, greaterFloat); ok {
-		return v
+		return v, true
 	}
-	return InstNumComparisonPredicate{InstNumGreater{this.Left.SimplifyNum(), this.Right.SimplifyNum()}}
+	l, lsimpl := this.Left.SimplifyNum()
+	r, rsimpl := this.Right.SimplifyNum()
+	return InstNumComparisonPredicate{InstNumGreater{l, r}}, lsimpl || rsimpl
 }
-func (this InstNumGreaterEq) SimplifyNumComp() InstBoolExpr {
+func (this InstNumGreaterEq) SimplifyNumComp() (InstBoolExpr, bool) {
 	if v, ok := operateComp(this.Left, this.Right, greateqInt, greateqFloat); ok {
-		return v
+		return v, true
 	}
-	return InstNumComparisonPredicate{InstNumGreaterEq{this.Left.SimplifyNum(), this.Right.SimplifyNum()}}
+	l, lsimpl := this.Left.SimplifyNum()
+	r, rsimpl := this.Right.SimplifyNum()
+	return InstNumComparisonPredicate{InstNumGreaterEq{l, r}}, lsimpl || rsimpl
 }
-func (this InstNumEq) SimplifyNumComp() InstBoolExpr {
+func (this InstNumEq) SimplifyNumComp() (InstBoolExpr, bool) {
 	if v, ok := operateComp(this.Left, this.Right, eqInt, eqFloat); ok {
-		return v
+		return v, true
 	}
-	return InstNumComparisonPredicate{InstNumEq{this.Left.SimplifyNum(), this.Right.SimplifyNum()}}
+	l, lsimpl := this.Left.SimplifyNum()
+	r, rsimpl := this.Right.SimplifyNum()
+	return InstNumComparisonPredicate{InstNumEq{l, r}}, lsimpl || rsimpl
 }
-func (this InstNumNotEq) SimplifyNumComp() InstBoolExpr {
+func (this InstNumNotEq) SimplifyNumComp() (InstBoolExpr, bool) {
 	if v, ok := operateComp(this.Left, this.Right, neqInt, neqFloat); ok {
-		return v
+		return v, true
 	}
-	return InstNumComparisonPredicate{InstNumNotEq{this.Left.SimplifyNum(), this.Right.SimplifyNum()}}
+	l, lsimpl := this.Left.SimplifyNum()
+	r, rsimpl := this.Right.SimplifyNum()
+	return InstNumComparisonPredicate{InstNumNotEq{l, r}}, lsimpl || rsimpl
 }
 
-func (this InstIntLiteralExpr) SimplifyNum() InstNumExpr {
-	return this
+func (this InstIntLiteralExpr) SimplifyNum() (InstNumExpr, bool) {
+	return this, false
 }
-func (this InstFloatLiteralExpr) SimplifyNum() InstNumExpr {
-	return this
+func (this InstFloatLiteralExpr) SimplifyNum() (InstNumExpr, bool) {
+	return this, false
 }
-func (this InstNumMulExpr) SimplifyNum() InstNumExpr {
+func (this InstNumMulExpr) SimplifyNum() (InstNumExpr, bool) {
 	if v, ok := checkNeutralOperate(this.Left, this.Right, 1, multInt, multFloat); ok {
-		return v
+		return v, true
 	}
-	return InstNumMulExpr{this.Left.SimplifyNum(), this.Right.SimplifyNum()}
+	l, lsimpl := this.Left.SimplifyNum()
+	r, rsimpl := this.Right.SimplifyNum()
+	return InstNumMulExpr{l, r}, lsimpl || rsimpl
 }
-func (this InstNumDivExpr) SimplifyNum() InstNumExpr {
+func (this InstNumDivExpr) SimplifyNum() (InstNumExpr, bool) {
 	vir, ir := this.Right.(InstIntLiteralExpr)
 	vfr, fr := this.Right.(InstFloatLiteralExpr)
 	neutralR := (ir && vir.Num == 1) || (fr && vfr.Num == float32(1))
 	if neutralR { //divisor is 1
 		return this.Left.SimplifyNum()
 	}
-	return InstNumDivExpr{this.Left.SimplifyNum(), this.Right.SimplifyNum()}
+	l, lsimpl := this.Left.SimplifyNum()
+	r, rsimpl := this.Right.SimplifyNum()
+	return InstNumDivExpr{l, r}, lsimpl || rsimpl
 }
-func (this InstNumPlusExpr) SimplifyNum() InstNumExpr {
+func (this InstNumPlusExpr) SimplifyNum() (InstNumExpr, bool) {
 	if v, ok := checkNeutralOperate(this.Left, this.Right, 0, plusInt, plusFloat); ok {
-		return v
+		return v, true
 	}
-	return InstNumPlusExpr{this.Left.SimplifyNum(), this.Right.SimplifyNum()}
+	l, lsimpl := this.Left.SimplifyNum()
+	r, rsimpl := this.Right.SimplifyNum()
+	return InstNumPlusExpr{l, r}, lsimpl || rsimpl
 }
-func (this InstNumMinusExpr) SimplifyNum() InstNumExpr {
+func (this InstNumMinusExpr) SimplifyNum() (InstNumExpr, bool) {
 	if v, ok := checkNeutralOperate(this.Left, this.Right, 0, minusInt, minusFloat); ok {
-		return v
+		return v, true
 	}
-	return InstNumMinusExpr{this.Left.SimplifyNum(), this.Right.SimplifyNum()}
+	l, lsimpl := this.Left.SimplifyNum()
+	r, rsimpl := this.Right.SimplifyNum()
+	return InstNumMinusExpr{l, r}, lsimpl || rsimpl
 }
-func (this InstStreamOffsetExpr) SimplifyNum() InstNumExpr {
-	return this //note it is not the same pattern as with Substitute
+func (this InstStreamOffsetExpr) SimplifyNum() (InstNumExpr, bool) {
+	return this, false //note it is not the same pattern as with Substitute
 }
-func (this InstConstExpr) SimplifyNum() InstNumExpr {
-	return this
+func (this InstConstExpr) SimplifyNum() (InstNumExpr, bool) {
+	return this, false
 }
 
 //String
-func (this InstStringLiteralExpr) SimplifyStr() InstStrExpr {
-	return this
+func (this InstStringLiteralExpr) SimplifyStr() (InstStrExpr, bool) {
+	return this, false
 }
-func (this InstStrConcatExpr) SimplifyStr() InstStrExpr {
+func (this InstStrConcatExpr) SimplifyStr() (InstStrExpr, bool) {
 	if v, ok := checkEmptyOperate(this.Left, this.Right, "", concatStr); ok {
-		return v
+		return v, true
 	}
-	return InstStrConcatExpr{this.Left.SimplifyStr(), this.Right.SimplifyStr()}
+	l, lsimpl := this.Left.SimplifyStr()
+	r, rsimpl := this.Right.SimplifyStr()
+	return InstStrConcatExpr{l, r}, lsimpl || rsimpl
 }
-func (this InstStreamOffsetExpr) SimplifyStr() InstStrExpr {
-	return this //note it is not the same pattern as with Substitute
+func (this InstStreamOffsetExpr) SimplifyStr() (InstStrExpr, bool) {
+	return this, false //note it is not the same pattern as with Substitute
 }
-func (this InstConstExpr) SimplifyStr() InstStrExpr {
-	return this
+func (this InstConstExpr) SimplifyStr() (InstStrExpr, bool) {
+	return this, false
 }
-func (this InstStrEqExpr) SimplifyStrComp() InstBoolExpr {
+func (this InstStrEqExpr) SimplifyStrComp() (InstBoolExpr, bool) {
 	if v, ok := operateCompStr(this.Left, this.Right, eqStr); ok {
-		return v
+		return v, true
 	}
-	return InstStrComparisonPredicate{InstStrEqExpr{this.Left.SimplifyStr(), this.Right.SimplifyStr()}}
+	l, lsimpl := this.Left.SimplifyStr()
+	r, rsimpl := this.Right.SimplifyStr()
+	return InstStrComparisonPredicate{InstStrEqExpr{l, r}}, lsimpl || rsimpl
 }
 
 //Literals need to implement InstExpr to compile, implementation of Simplify (should not be needed at runtime)
-func (this InstTruePredicate) Simplify() InstExpr {
-	return this
+//will be used as the result value of the expression, note they are InstExpr, not the corresponding subtype
+func (this InstTruePredicate) Simplify() (InstExpr, bool) {
+	return this, false
 }
-func (this InstFalsePredicate) Simplify() InstExpr {
-	return this
+func (this InstFalsePredicate) Simplify() (InstExpr, bool) {
+	return this, false
 }
-func (this InstIntLiteralExpr) Simplify() InstExpr {
-	return this
+func (this InstIntLiteralExpr) Simplify() (InstExpr, bool) {
+	return this, false
 }
-func (this InstFloatLiteralExpr) Simplify() InstExpr {
-	return this
+func (this InstFloatLiteralExpr) Simplify() (InstExpr, bool) {
+	return this, false
 }
-func (this InstStringLiteralExpr) Simplify() InstExpr {
-	return this
+func (this InstStringLiteralExpr) Simplify() (InstExpr, bool) {
+	return this, false
 }
 
 //Num comparison auxiliary funcs
@@ -295,10 +351,10 @@ func checkNeutralOperate(left, right InstNumExpr, neutral int, fint func(int, in
 	vfr, fr := right.(InstFloatLiteralExpr)
 	neutralR := (ir && vir.Num == neutral) || (fr && vfr.Num == float32(neutral))
 	if neutralL { //left operand is neutral of the operation
-		return right.SimplifyNum(), true
+		return right.SimplifyNum()
 	}
 	if neutralR { //right operand is neutral of the operation
-		return left.SimplifyNum(), true
+		return left.SimplifyNum()
 	}
 	if il && ir { //both are int literals, operate
 		return InstIntLiteralExpr{fint(vil.Num, vir.Num)}, true
@@ -347,10 +403,10 @@ func checkEmptyOperate(left, right InstStrExpr, neutral string, fstr func(string
 	vsr, sr := right.(InstStringLiteralExpr)
 	neutralR := sr && vsr.S == neutral
 	if neutralL {
-		return right.SimplifyStr(), true
+		return right.SimplifyStr()
 	}
 	if neutralR {
-		return left.SimplifyStr(), true
+		return left.SimplifyStr()
 	}
 	if sl && sr {
 		return InstStringLiteralExpr{fstr(vsl.S, vsr.S)}, true

@@ -56,11 +56,11 @@ Expr <- IF p:BooleanExpr THEN a:Expr ELSE b:Expr { return NewIfThenElseExpr(p,a,
 BooleanExpr <- a:Ands    b:(OrExpr*) {
 	       preds := ToSlice(b)
 	       if len(preds)==0 {
-	       	  fmt.Printf("boolean expr without or\n")
+	       	  //fmt.Printf("boolean expr without or\n")
 	       	  v, err := getBoolExpr(a)
-		  fmt.Printf("Error %s", err)
+		  //fmt.Printf("Error %s", err)
 		  if err == nil{
-		     fmt.Printf("boolean NO error: %s", v.Sprint())
+		     //fmt.Printf("boolean NO error: %s", v.Sprint())
 	       	     return BoolExprToExpr(v),nil //old: a,nil lm:BoolExprToExpr(a), nil
 		  } else {
 		  fmt.Printf("boolean error")

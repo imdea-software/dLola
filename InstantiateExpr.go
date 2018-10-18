@@ -10,7 +10,7 @@ import (
 type InstExpr interface {
 	Sprint() string
 	Substitute(InstStreamExpr, InstExpr) InstExpr
-	Simplify() InstExpr
+	Simplify() (InstExpr, bool)
 }
 type InstConstExpr struct { // implements Expr,NumExpr,BoolExpr
 	Name StreamName
@@ -71,7 +71,7 @@ func (this InstStreamFetchExpr) GetTick() int {
 type InstBoolExpr interface {
 	Sprint() string
 	SubstituteBool(InstStreamExpr, InstExpr) InstBoolExpr
-	SimplifyBool() InstBoolExpr
+	SimplifyBool() (InstBoolExpr, bool)
 }
 type InstTruePredicate struct{ Pos Position }
 type InstFalsePredicate struct{ Pos Position }
@@ -102,7 +102,7 @@ type InstStrComparisonPredicate struct {
 type InstNumComparison interface {
 	Sprint() string
 	SubstituteNumComp(InstStreamExpr, InstExpr) InstNumComparison
-	SimplifyNumComp() InstBoolExpr
+	SimplifyNumComp() (InstBoolExpr, bool)
 }
 type InstNumLess struct {
 	Left  InstNumExpr
@@ -132,7 +132,7 @@ type InstNumNotEq struct {
 type InstNumExpr interface {
 	Sprint() string
 	SubstituteNum(InstStreamExpr, InstExpr) InstNumExpr
-	SimplifyNum() InstNumExpr
+	SimplifyNum() (InstNumExpr, bool)
 }
 type InstIntLiteralExpr struct {
 	Num int
@@ -163,7 +163,7 @@ type InstNumMinusExpr struct {
 type InstStrExpr interface {
 	Sprint() string
 	SubstituteStr(InstStreamExpr, InstExpr) InstStrExpr
-	SimplifyStr() InstStrExpr
+	SimplifyStr() (InstStrExpr, bool)
 }
 type InstStringLiteralExpr struct {
 	S string
@@ -177,7 +177,7 @@ type InstStrConcatExpr struct {
 type InstStrComparison interface {
 	Sprint() string
 	SubstituteStrComp(InstStreamExpr, InstExpr) InstStrComparison
-	SimplifyStrComp() InstBoolExpr
+	SimplifyStrComp() (InstBoolExpr, bool)
 }
 type InstStrEqExpr struct {
 	Left  InstStrExpr

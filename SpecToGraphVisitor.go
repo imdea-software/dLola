@@ -9,7 +9,7 @@ package dLola
 type SpecToGraphVisitor struct { //implements ExprVisitor, BooleanExprVisitor, NumExprVisitor, NumComparisonVisitor and StreamExprVisitor
 	//fields, may be stateful
 	g DepGraphAdj //stateful, need correct initialization
-	s string      //streamname of the expression
+	s StreamName  //streamname of the expression
 }
 
 /*ExprVisitor methods*/
@@ -121,7 +121,7 @@ func (v *SpecToGraphVisitor) VisitNumMinusExpr(e NumMinusExpr) {
 
 /*StreamExprVisitor methods*/
 func (v *SpecToGraphVisitor) VisitStreamFetchExpr(s StreamFetchExpr) {
-	a := Adj{v.s, s.Offset.val, s.Name.Sprint()}
+	a := Adj{v.s, s.Offset.val, s.Name}
 	adjs, ok := v.g[v.s]
 	if ok {
 		if !elem(adjs, a, EqAdj) {
