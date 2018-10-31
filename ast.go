@@ -61,6 +61,7 @@ type OutputDecl struct { // output int foo /* this is just a decl, later a tick 
 type OutputDefinition struct {
 	Name StreamName
 	Type StreamType
+	Eval bool
 	Expr Expr // chango to ValueExpr?
 	Pos  Position
 }
@@ -89,14 +90,24 @@ func NewOutputDecl(n, t, p interface{}) OutputDecl {
 	return TicksDecl{name, expr}
 }*/
 
-func NewOutputDefinition(n, t, e, p interface{}) OutputDefinition {
+func NewOutputDefinition(n, t, le, e, p interface{}) OutputDefinition {
 	name := getStreamName(n)
 	expr := e.(Expr)
-	return OutputDefinition{name, t.(StreamType), expr, NewPosition(p)}
+	eval := getEval(le)
+	return OutputDefinition{name, t.(StreamType), eval, expr, NewPosition(p)}
 }
 
 func getStreamName(a interface{}) StreamName {
 	return StreamName(a.(Identifier).Val)
+}
+
+func getEval(le interface{}) bool {
+	eval := true
+	v, ok := le.(bool)
+	if ok {
+		eval = v
+	} //if le was not a bool, it will be considered eval
+	return eval
 }
 
 //

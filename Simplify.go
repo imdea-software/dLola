@@ -1,16 +1,18 @@
 package dLola
 
-import (
+/*import (
 	//	"errors"
 	"fmt"
 	//	"strconv"
-)
+)*/
 
 func SimplifyExpr(exp InstExpr) InstExpr {
 	expSimpl := true
 	for expSimpl { //while something in the expression get simplified try to simplify further
+		//fmt.Printf("simplifying again: %s\n", exp.Sprint())
 		exp, expSimpl = exp.Simplify()
 	}
+	//fmt.Printf("Done simplifying: %s\n", exp.Sprint())
 	return exp
 }
 
@@ -46,7 +48,7 @@ func (this InstBooleanExpr) Simplify() (InstExpr, bool) {
 	return InstBooleanExpr{b}, simpl
 }
 func (this InstNumericExpr) Simplify() (InstExpr, bool) {
-	fmt.Printf("Simplifying Numeric expression: %s", this.Sprint())
+	//fmt.Printf("Simplifying Numeric expression: %s\n", this.Sprint())
 	n, simpl := this.NExpr.SimplifyNum()
 	switch c := n.(type) {
 	case InstIntLiteralExpr:
@@ -211,7 +213,9 @@ func (this InstNumDivExpr) SimplifyNum() (InstNumExpr, bool) {
 	return InstNumDivExpr{l, r}, lsimpl || rsimpl
 }
 func (this InstNumPlusExpr) SimplifyNum() (InstNumExpr, bool) {
+	//fmt.Printf("Simplifying Sum expression: %s\n", this.Sprint())
 	if v, ok := checkNeutralOperate(this.Left, this.Right, 0, plusInt, plusFloat); ok {
+		//fmt.Printf("Neutral expression:\n")
 		return v, true
 	}
 	l, lsimpl := this.Left.SimplifyNum()
@@ -350,23 +354,32 @@ func checkNeutralOperate(left, right InstNumExpr, neutral int, fint func(int, in
 	vir, ir := right.(InstIntLiteralExpr)
 	vfr, fr := right.(InstFloatLiteralExpr)
 	neutralR := (ir && vir.Num == neutral) || (fr && vfr.Num == float32(neutral))
-	if neutralL { //left operand is neutral of the operation
-		return right.SimplifyNum()
-	}
-	if neutralR { //right operand is neutral of the operation
-		return left.SimplifyNum()
-	}
+	//fmt.Printf("Check Neutral op: il: %t, fl: %t, ir:%t, fr:%t\n", il, fl, ir, fr)
 	if il && ir { //both are int literals, operate
+		//fmt.Printf("Both ints \n")
 		return InstIntLiteralExpr{fint(vil.Num, vir.Num)}, true
 	}
 	if il && fr { //int op float
+		//fmt.Printf("int op float \n")
 		return InstFloatLiteralExpr{ffloat(float32(vil.Num), vfr.Num)}, true
 	}
 	if fl && ir { //float op int
+		//fmt.Printf("float op int \n")
 		return InstFloatLiteralExpr{ffloat(vfl.Num, float32(vir.Num))}, true
 	}
 	if fl && fr { //float op float
+		//fmt.Printf("float op float \n")
 		return InstFloatLiteralExpr{ffloat(vfl.Num, vfr.Num)}, true
+	}
+	if neutralL { //left operand is neutral of the operation
+		//fmt.Printf("Left was neutral \n")
+		e, _ := right.SimplifyNum()
+		return e, true
+	}
+	if neutralR { //right operand is neutral of the operation
+		//fmt.Printf("Right was neutral \n")
+		e, _ := left.SimplifyNum()
+		return e, true
 	}
 	return nil, false
 }
@@ -402,14 +415,14 @@ func checkEmptyOperate(left, right InstStrExpr, neutral string, fstr func(string
 	neutralL := sl && vsl.S == neutral
 	vsr, sr := right.(InstStringLiteralExpr)
 	neutralR := sr && vsr.S == neutral
+	if sl && sr {
+		return InstStringLiteralExpr{fstr(vsl.S, vsr.S)}, true
+	}
 	if neutralL {
 		return right.SimplifyStr()
 	}
 	if neutralR {
 		return left.SimplifyStr()
-	}
-	if sl && sr {
-		return InstStringLiteralExpr{fstr(vsl.S, vsr.S)}, true
 	}
 	return nil, false
 }

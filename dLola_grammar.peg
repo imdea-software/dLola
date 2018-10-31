@@ -21,7 +21,6 @@ Declaration <- i:InputStreamDecl   { return i,nil }
 
 Const <- CONST t:Type n:Name ASSIGN e:Expr { 
       // if !checkGround(e) { return nil,err }
-      fmt.Sprintf("")
       return NewConstDecl(n,t,e,c.pos),nil //c.pos is a struct defined in parser.go (once generated) containing line, col and offset
 }
 
@@ -29,13 +28,16 @@ InputStreamDecl <- INPUT t:Type n:Name {
     return NewInputDecl(n,t, c.pos),nil
 }
 
-OutputDefinition <- d:DefOut t:Type n:Name ASSIGN e:Block {
-    return NewOutputDefinition(n,t,e, c.pos),nil
+OutputDefinition <- d:DefOut t:Type n:Name le:LazyEval? ASSIGN e:Block {
+    return NewOutputDefinition(n,t,le, e, c.pos),nil
 }
 
 DefOut <- DEFINE / OUTPUT{
-       return c.text,nil
+       return string(c.text),nil
 }
+
+LazyEval <- LAZY { return false, nil }
+	    / EVAL { return true, nil }
 
 /*OutputStreamDecl <- OUTPUT t:Type n:Name {
     return NewOutputDecl(n,t),nil	  
@@ -329,7 +331,8 @@ NEQ <- "!=" _?
 
 SEQ <- "sEq"  _?
 
-
+LAZY <- "lazy" _?
+EVAL <- "eval" _?
 
 STRCONCAT <- "sConcat" _?
 

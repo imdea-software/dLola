@@ -48,11 +48,37 @@ type InstStreamExpr interface {
 	SubstituteStr(InstStreamExpr, InstExpr) InstStrExpr
 	GetName() StreamName
 	GetTick() int
+	Eq(InstStreamExpr) bool
 	//Simplify() InstExpr THESE WILL NOT BE USED AS AN INSTANTIATED STREAM CANNOT BE SIMPLIFIED
 	//SimplifyBool() InstBoolExpr
 	//SimplifyNum() InstNumExpr
 	//SimplifyStr() InstStrExpr
 }
+
+func SprintStreams(streams []InstStreamExpr) string {
+	r := "["
+	for _, s := range streams {
+		r += s.Sprint()
+	}
+	r += "]"
+	return r
+}
+
+func elemStream(as []InstStreamExpr, a InstStreamExpr, f func(InstStreamExpr, InstStreamExpr) bool) bool { //will usually be called with f = EqInstStreamExpr
+	//fmt.Printf("path %v, node %s", path, node)
+	is := false
+	for i := 0; i < len(as) && !is; i++ {
+		if f(a, as[i]) {
+			is = true
+		}
+	}
+	return is
+}
+
+func EqInstStreamExpr(this, s InstStreamExpr) bool {
+	return this.Eq(s)
+}
+
 type InstStreamFetchExpr struct { //implements StreamExpr
 	Name StreamName
 	Tick int
@@ -65,6 +91,9 @@ func (this InstStreamFetchExpr) GetName() StreamName {
 }
 func (this InstStreamFetchExpr) GetTick() int {
 	return this.Tick
+}
+func (this InstStreamFetchExpr) Eq(s InstStreamExpr) bool {
+	return this.GetName() == s.GetName() && this.GetTick() == s.GetTick()
 }
 
 //Boolean
@@ -241,7 +270,7 @@ func (this StrComparisonPredicate) InstantiateBoolExpr(tick, tlen int) InstBoolE
 
 //Stream
 func (this StreamFetchExpr) InstantiateStreamExpr(tick, tlen int) InstExpr {
-	if this.Offset.val+tick < 0 || this.Offset.val+tick > tlen {
+	if this.Offset.val+tick < 0 || this.Offset.val+tick >= tlen {
 		return convertToInstExpr(this.Default)
 	}
 	r := InstStreamOffsetExpr{InstStreamFetchExpr{this.Name, this.Offset.val + tick}}
