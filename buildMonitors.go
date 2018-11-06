@@ -1,7 +1,7 @@
 package dLola
 
 import (
-	//"fmt"
+	//	"fmt"
 	"math"
 )
 
@@ -206,7 +206,7 @@ func GenerateReqs(spec *Spec, past_future, trigger string, tlen int, delta map[S
 		if RootStream(o.Name, depGraph) {
 			stream := InstStreamFetchExpr{o.Name, tick_req}
 			dst := delta[o.Name]
-			m := Msg{kind, stream, nil, nil, nil, 0, dst} //src of the msgs will be monitor 0
+			m := Msg{kind, stream, nil, nil, nil, dst, dst} //src of the msgs will be themselves so they do not emit a response msg
 			reqsi, ok := reqs[dst]
 			if ok {
 				//fmt.Printf("There were prev reqs\n")
@@ -241,8 +241,27 @@ func BuildMonitors(tlen, nmons int, spec *Spec, reqs map[Id][]Msg, delta map[Str
 	//eval := map[StreamName]struct{}{}
 	for i := 0; i < nmons; i++ {
 		routes := GenerateRoutes(nmons, i, topo)
-		mon := NewMonitor(i, tlen, *spec, reqs[i], routes, delta, depGraph, dependencies)
+		channels := GenerateChannels(delta, spec, depGraph, i, tlen)
+		mon := NewMonitor(i, tlen, *spec, reqs[i], routes, delta, depGraph, dependencies, channels)
 		mons[i] = &mon
 	}
 	return mons
+}
+
+func GenerateChannels(delta map[StreamName]Id, spec *Spec, depGraph DepGraphAdj, id Id, tlen int) []chan Resolved {
+	channels := make([]chan Resolved, 0)
+	for stream, dependencies := range depGraph {
+		if delta[stream] == id {
+			for _, d := range dependencies {
+				//fmt.Printf("%v\n", spec.Input)
+				if inputDecl, ok := spec.Input[d.Dest]; ok {
+					//fmt.Printf("found input %s for monitor %d\n", d.Dest, id)
+					c := make(chan Resolved)
+					generateInput(d.Dest, inputDecl.Type, c, tlen) //call to inputReader!!! TODO
+					channels = append(channels, c)
+				}
+			}
+		}
+	}
+	return channels
 }

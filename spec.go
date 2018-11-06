@@ -93,10 +93,8 @@ func declared_define(name StreamName, spec *specInProgress) bool {
 }
 
 func ProcessDeclarations(ds []interface{}) (*Spec, error) {
-
 	spec := newSpec()
 	in_progress := newSpecInProgress()
-
 	for _, v := range ds {
 		switch decl := v.(type) {
 		case InputDecl:
@@ -120,16 +118,6 @@ func ProcessDeclarations(ds []interface{}) (*Spec, error) {
 				return nil, errors.New(str)
 			}
 			in_progress.Output[name] = decl
-		/*case TicksDecl:
-		name := StreamName(decl.Name)
-		if declared_input(name, spec) ||
-			declared_const(name, spec) ||
-			declared_ticks(name, in_progress) {
-			str := fmt.Sprintf("%s redeclared", name)
-			return nil, errors.New(str)
-		}
-		in_progress.Ticks[name] = decl
-		*/
 		case OutputDefinition:
 			name := StreamName(decl.Name)
 			if declared_input(name, spec) ||
@@ -143,7 +131,7 @@ func ProcessDeclarations(ds []interface{}) (*Spec, error) {
 		case string:
 			//ignore it is a comment
 		default:
-			str := fmt.Sprint("Unexpected type returned by parser: %t", v)
+			str := fmt.Sprintf("Unexpected type returned by parser: %t", v)
 			return nil, errors.New(str)
 		}
 	}
@@ -151,61 +139,28 @@ func ProcessDeclarations(ds []interface{}) (*Spec, error) {
 	//  1.Check that all output streams appear in ticks and defined
 	//  exactly once
 	for key, decl := range in_progress.Output {
-		//tick, is_tick := in_progress.Ticks[key]
 		def, is_define := in_progress.Define[key]
-		/*if !is_tick { // "output" but not "ticks"
-			str := fmt.Sprintf("stream %s is defined as\"output\" but not \"ticks\"\n", key)
-			return spec, errors.New(str)
-		}*/
 		if !is_define { // "output" but not "define"
 			str := fmt.Sprintf("stream %s is defined as\"output\" but not \"define\"\n", key)
 			return spec, errors.New(str)
-			if def.Type != decl.Type { // inconsistent types
-				str := fmt.Sprintf("%s has diferent types in \"output\" and \"define\": %s and %s\n", key, decl.Type.Sprint(), def.Type.Sprint())
-				return spec, errors.New(str)
-			}
+		}
+		if def.Type != decl.Type { // inconsistent types
+			str := fmt.Sprintf("%s has diferent types in \"output\" and \"define\": %s and %s\n", key, decl.Type.Sprint(), def.Type.Sprint())
+			return spec, errors.New(str)
 		}
 		// OK. All matches
 		spec.Output[key] = OutputStream{key, def.Type, def.Eval /*, tick.Ticks*/, def.Expr}
 	}
 
 	//
-	// 2. Check wether all "ticks" have "define" and "output"
-	//
-	/*for key, _ := range in_progress.Ticks {
-		_, declared := in_progress.Output[key]
-		_, defined := in_progress.Define[key]
-		if !declared && !defined {
-			str := fmt.Sprintf("%s has \"ticks\" but neither \"output\" nor \"define\"", key)
-			return spec, errors.New(str)
-		}
-		if !declared {
-			str := fmt.Sprintf("%s has \"ticks\" and \"define\"but not \"output\"", key)
-			return spec, errors.New(str)
-		}
-		if !defined {
-			str := fmt.Sprintf("%s has \"ticks\" and \"output\"but not \"define\"", key)
-			return spec, errors.New(str)
-		}
-	}*/
-	//
-	// 3. Check wether all "define" have "ticks" and "output"
+	// 3. Check wether all "define" have "output"
 	//
 	for key, _ := range in_progress.Define {
 		_, declared := in_progress.Output[key]
-		//_, areticks := in_progress.Ticks[key]
-		/*if !declared && !areticks {
-			str := fmt.Sprintf("%s has \"define\" but neither \"output\" nor \"ticks\"", key)
-			return spec, errors.New(str)
-		}*/
 		if !declared {
 			str := fmt.Sprintf("%s has \"define\" and \"ticks\"but not \"output\"", key)
 			return spec, errors.New(str)
 		}
-		/*if !areticks {
-			str := fmt.Sprintf("%s has \"define\" and \"output\"but not \"ticks\"", key)
-			return spec, errors.New(str)
-		}*/
 	}
 	return spec, nil
 }

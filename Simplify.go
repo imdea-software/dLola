@@ -30,10 +30,12 @@ func (this InstIfThenElseExpr) Simplify() (InstExpr, bool) {
 	_, tbranch := i.(InstTruePredicate)
 	_, fbranch := i.(InstFalsePredicate)
 	if tbranch {
-		return this.Then.Simplify()
+		e, _ := this.Then.Simplify()
+		return e, true
 	} else {
 		if fbranch {
-			return this.Else.Simplify()
+			e, _ := this.Else.Simplify()
+			return e, true
 		}
 	}
 	then, simplthen := this.Then.Simplify()

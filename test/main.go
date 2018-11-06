@@ -5,24 +5,33 @@ import (
 	"fmt"
 	dLola "gitlab.software.imdea.org/luismiguel.danielsson/dLola"
 	"os"
+	"strconv"
 )
 
 func main() {
+	filename := os.Args[1]
+	past_future := os.Args[2]
+	trigger := os.Args[3]
+	topo := os.Args[4]
+	nmons, _ := strconv.Atoi(os.Args[5])
+	tlen, _ := strconv.Atoi(os.Args[6])
+	getSpec(filename, past_future, trigger, topo, nmons, tlen)
+}
+
+func getSpec(filename, past_future, trigger, topo string, nmons, tlen int) {
 	prefix := "[dLola_compiler]: "
-	s := os.Args[1]
-	fmt.Printf(prefix+"Parsing file %s\n", s)
-	spec, err := dLola.GetSpec(s, prefix)
+	fmt.Printf(prefix+"Parsing file %s\n", filename)
+	spec, err := dLola.GetSpec(filename, prefix)
 	if err != nil {
 		fmt.Printf("There was an error while parsing: %s\n", err)
 		return
 	}
 	//dLola.PrintSpec(spec, prefix)
-	fmt.Printf(prefix + "Generating Pretty Print\n")
-	fmt.Printf(dLola.PrettyPrintSpec(spec, prefix))
+	//fmt.Printf(prefix + "Generating Pretty Print\n")
+	//fmt.Printf(dLola.PrettyPrintSpec(spec, prefix))
 	dLola.CheckTypesSpec(spec, prefix)
-
 	if analyzeWF(spec) {
-		buildMonitor(spec)
+		buildMonitor(spec, past_future, trigger, topo, tlen, nmons)
 	}
 }
 
@@ -61,25 +70,27 @@ func analyzeWF(spec *dLola.Spec) bool {
 	return true
 }
 
-func buildMonitor(spec *dLola.Spec) {
+func buildMonitor(spec *dLola.Spec, past_future, trigger, topo string, tlen, nmons int) {
 	prefix := "[dLola_Monitor_Builder]: "
 	fmt.Printf("%sBuilding Monitor...\n", prefix)
-	/*instantiateSpec(spec, 2, 2)
-	instantiateSpec(spec, 0, 2)
-	instantiateSpec(spec, 1, 2)*/
-	depGraph := dLola.SpecToGraph(spec)
-	routes := map[dLola.Id]dLola.Id{0: 0}
-	delta := dLola.RoundrDelta(*spec, 1)
-	dependencies := dLola.InterestedMonitors(delta, depGraph)
-	eval := []dLola.StreamName{}
-	mon := dLola.NewMonitor(0, 2, *spec, routes, delta, eval, depGraph, dependencies)
-	mons := map[dLola.Id]*dLola.Monitor{0: &mon}
-	dLola.Converge(mons)
-	fmt.Printf("Converged mons:%s\n", dLola.PrintMons(mons))
+	delta := dLola.RoundrDelta(*spec, nmons)
+	fmt.Printf("Delta:%v\n", delta)
+	req := dLola.GenerateReqs(spec, past_future, trigger, tlen, delta)
+	fmt.Printf("Generated Reqs:%v\n", req)
+	mons := dLola.BuildMonitors(tlen, nmons, spec, req, delta, topo)
+	verdict := dLola.ConvergeCountTrigger(mons)
+	//dLola.Tickn(mons, 4)
+	fmt.Printf("Verdict: %s\n", verdict.Short())
+
+	/*	f := dLola.RootStream("one", dLola.SpecToGraph(spec))
+		fmt.Printf("One is root:%t\n", f)
+		f2 := dLola.RootStream("two", dLola.SpecToGraph(spec))
+		fmt.Printf("Two is root:%t\n", f2)
+	*/
 }
 
 func instantiateSpec(spec *dLola.Spec, tick, tlen int) {
-	if tick >= 0 && tick < tlen { //othw may produce errors!!
+	if tick >= 0 && tick < tlen { //othw may produce errors!! for those streams with no shift
 		prefix := "[dLola_Monitor_Builder]: "
 		fmt.Printf("%sInstantiating spec for tick %d with tlen %d\n", prefix, tick, tlen)
 		for _, o := range spec.Output {

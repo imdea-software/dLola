@@ -1,7 +1,6 @@
 package dLola
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 )
@@ -291,7 +290,7 @@ func convertToInstExpr(d DefaultExpr) InstExpr {
 	case StringLiteralExpr:
 		r = InstStringLiteralExpr{v.S}
 	default: //will occurr for streams used as s = r without specifying default values
-		errors.New("Impossible to convert other thing to InstExpr\n")
+		panic("Impossible to convert other thing to InstExpr\n")
 	}
 	return r
 
@@ -634,7 +633,7 @@ func (this InstStrEqExpr) SubstituteStrComp(s InstStreamExpr, v InstExpr) InstSt
 	return InstStrEqExpr{this.Left.SubstituteStr(s, v), this.Right.SubstituteStr(s, v)}
 }
 
-//Literals need to implement InstExpr to compile, implementation of Substitute (should not be needed at runtime)
+//Literals need to implement InstExpr to compile, implementation of Substitute will be used for resolved streams
 func (this InstTruePredicate) Substitute(s InstStreamExpr, v InstExpr) InstExpr {
 	return this
 }
