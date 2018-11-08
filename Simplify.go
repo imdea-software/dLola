@@ -26,18 +26,24 @@ func (this InstLetExpr) Simplify() (InstExpr, bool) {
 	return InstLetExpr{this.Name, bind, body}, simplbind || simplbody
 }
 func (this InstIfThenElseExpr) Simplify() (InstExpr, bool) {
+	//fmt.Printf("Simplifying IF: %s\n", this.Sprint())
 	i, _ := this.If.Simplify()
-	_, tbranch := i.(InstTruePredicate)
-	_, fbranch := i.(InstFalsePredicate)
+	ib := i.(InstBooleanExpr).BExpr
+	_, tbranch := ib.(InstTruePredicate)
+	_, fbranch := ib.(InstFalsePredicate)
+	//fmt.Printf("Simplifying IF condition simplified of type: %T\n", i)
 	if tbranch {
+		//fmt.Printf("Simplifying IF then branch: %s\n", i.Sprint())
 		e, _ := this.Then.Simplify()
 		return e, true
 	} else {
 		if fbranch {
+			//fmt.Printf("Simplifying IF then branch: %s\n", i.Sprint())
 			e, _ := this.Else.Simplify()
 			return e, true
 		}
 	}
+	//fmt.Printf("Simplifying IF condition could not be resolved: %s\n", i.Sprint())
 	then, simplthen := this.Then.Simplify()
 	elsse, simplelsse := this.Else.Simplify()
 	return InstIfThenElseExpr{i, then, elsse}, simplthen || simplelsse

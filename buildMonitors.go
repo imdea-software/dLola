@@ -234,20 +234,6 @@ func RootStream(s StreamName, depGraph DepGraphAdj) bool {
 	return root
 }
 
-func BuildMonitors(tlen, nmons int, spec *Spec, reqs map[Id][]Msg, delta map[StreamName]Id, topo string) map[Id]*Monitor {
-	mons := make(map[Id]*Monitor)
-	depGraph := SpecToGraph(spec)
-	dependencies := InterestedMonitors(delta, depGraph)
-	//eval := map[StreamName]struct{}{}
-	for i := 0; i < nmons; i++ {
-		routes := GenerateRoutes(nmons, i, topo)
-		channels := GenerateChannels(delta, spec, depGraph, i, tlen)
-		mon := NewMonitor(i, tlen, *spec, reqs[i], routes, delta, depGraph, dependencies, channels)
-		mons[i] = &mon
-	}
-	return mons
-}
-
 func GenerateChannels(delta map[StreamName]Id, spec *Spec, depGraph DepGraphAdj, id Id, tlen int) []chan Resolved {
 	channels := make([]chan Resolved, 0)
 	for stream, dependencies := range depGraph {
@@ -264,4 +250,27 @@ func GenerateChannels(delta map[StreamName]Id, spec *Spec, depGraph DepGraphAdj,
 		}
 	}
 	return channels
+}
+
+func BuildMonitors(tlen, nmons int, spec *Spec, reqs map[Id][]Msg, delta map[StreamName]Id, topo string) map[Id]*Monitor {
+	mons := make(map[Id]*Monitor)
+	depGraph := SpecToGraph(spec)
+	dependencies := InterestedMonitors(delta, depGraph)
+	for i := 0; i < nmons; i++ {
+		routes := GenerateRoutes(nmons, i, topo)
+		channels := GenerateChannels(delta, spec, depGraph, i, tlen)
+		mon := NewMonitor(i, tlen, *spec, reqs[i], routes, delta, depGraph, dependencies, channels)
+		mons[i] = &mon
+	}
+	return mons
+}
+
+func BuildMonitorTopo(spec *Spec, past_future, trigger, topo string, nmons, tlen int) map[Id]*Monitor {
+	//prefix := "[dLola_Monitor_Builder]: "
+	//fmt.Printf("%sBuilding Monitor...\n", prefix)
+	delta := RoundrDelta(*spec, nmons)
+	//fmt.Printf("Delta:%v\n", delta)
+	req := GenerateReqs(spec, past_future, trigger, tlen, delta)
+	//fmt.Printf("Generated Reqs:%v\n", req)
+	return BuildMonitors(tlen, nmons, spec, req, delta, topo)
 }
