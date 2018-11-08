@@ -11,6 +11,7 @@ type StrExpr interface {
 	Sprint() string
 	GetPos() Position
 	InstantiateStrExpr(int, int) InstStrExpr
+	ConstantSubsStrExpr(*Spec) StrExpr
 }
 
 type StrExprVisitor interface {
@@ -132,6 +133,7 @@ type StrComparison interface {
 	AcceptStrComp(StrComparisonVisitor)
 	GetPos() Position
 	InstantiateStrCompExpr(int, int) InstStrComparison
+	ConstantSubsStrCompExpr(*Spec) StrComparison
 }
 
 type StrComparisonVisitor interface {

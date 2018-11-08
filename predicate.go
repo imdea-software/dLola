@@ -10,6 +10,7 @@ type BoolExpr interface {
 	AcceptBool(BoolExprVisitor)
 	GetPos() Position
 	InstantiateBoolExpr(int, int) InstBoolExpr
+	ConstantSubsBoolExpr(spec *Spec) BoolExpr
 }
 
 type BoolExprVisitor interface {

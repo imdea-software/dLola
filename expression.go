@@ -29,6 +29,7 @@ type Expr interface {
 	Accept(ExprVisitor)
 	GetPos() Position
 	InstantiateExpr(int, int) InstExpr // implemented in InstantiateExpr.go
+	ConstantSubs(spec *Spec) Expr
 }
 type ExprVisitor interface {
 	VisitConstExpr(ConstExpr)
@@ -223,6 +224,10 @@ type StreamExpr interface {
 	InstantiateBoolStreamExpr(int, int) InstBoolExpr
 	InstantiateNumStreamExpr(int, int) InstNumExpr
 	InstantiateStrStreamExpr(int, int) InstStrExpr
+	ConstantSubsStreamExpr(spec *Spec) Expr
+	ConstantSubsBoolStreamExpr(spec *Spec) BoolExpr
+	ConstantSubsNumStreamExpr(spec *Spec) NumExpr
+	ConstantSubsStrStreamExpr(spec *Spec) StrExpr
 }
 
 type StreamExprVisitor interface {

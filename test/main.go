@@ -15,24 +15,26 @@ func main() {
 	topo := os.Args[4]
 	nmons, _ := strconv.Atoi(os.Args[5])
 	tlen, _ := strconv.Atoi(os.Args[6])
-	getSpec(filename, past_future, trigger, topo, nmons, tlen)
+	spec, ok := getSpec(filename)
+	if ok {
+		buildMonitor(spec, past_future, trigger, topo, nmons, tlen)
+	}
 }
 
-func getSpec(filename, past_future, trigger, topo string, nmons, tlen int) {
+func getSpec(filename string) (*dLola.Spec, bool) {
 	prefix := "[dLola_compiler]: "
 	fmt.Printf(prefix+"Parsing file %s\n", filename)
 	spec, err := dLola.GetSpec(filename, prefix)
 	if err != nil {
 		fmt.Printf("There was an error while parsing: %s\n", err)
-		return
+		return nil, false
 	}
 	//dLola.PrintSpec(spec, prefix)
 	//fmt.Printf(prefix + "Generating Pretty Print\n")
 	//fmt.Printf(dLola.PrettyPrintSpec(spec, prefix))
 	dLola.CheckTypesSpec(spec, prefix)
-	if analyzeWF(spec) {
-		buildMonitor(spec, past_future, trigger, topo, tlen, nmons)
-	}
+	return spec, analyzeWF(spec)
+
 }
 
 func analyzeWF(spec *dLola.Spec) bool {
@@ -70,7 +72,7 @@ func analyzeWF(spec *dLola.Spec) bool {
 	return true
 }
 
-func buildMonitor(spec *dLola.Spec, past_future, trigger, topo string, tlen, nmons int) {
+func buildMonitor(spec *dLola.Spec, past_future, trigger, topo string, nmons, tlen int) {
 	prefix := "[dLola_Monitor_Builder]: "
 	fmt.Printf("%sBuilding Monitor...\n", prefix)
 	delta := dLola.RoundrDelta(*spec, nmons)
@@ -105,3 +107,5 @@ func instantiateSpec(spec *dLola.Spec, tick, tlen int) {
 		}
 	}
 }
+
+//go run main.go inputMonitor.txt past trigger clique 2 20

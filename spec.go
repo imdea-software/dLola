@@ -218,8 +218,18 @@ func GetSpec(filename, prefix string) (*Spec, error) {
 		return ProcessDeclarations([]interface{}{})
 	}
 	last := ast.([]interface{})
-	/*TODO: perform castings before returning -> it wont work since the output type will still be []interface{}, so direct call to methods won't work*/
-	return ProcessDeclarations(last)
+	s, err := ProcessDeclarations(last)
+	return SubsConstants(s), err
+}
+
+func SubsConstants(spec *Spec) *Spec {
+	PrintSpec(spec, "[subsconstants]")
+	for _, o := range spec.Output {
+		e := o.Expr.ConstantSubs(spec)
+		spec.Output[o.Name] = OutputStream{o.Name, o.Type, o.Eval, e}
+	}
+	PrintSpec(spec, "[subsconstants]")
+	return spec
 }
 
 var Verbose bool = false

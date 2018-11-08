@@ -14,6 +14,7 @@ type NumComparison interface {
 	AcceptNumComp(NumComparisonVisitor)
 	GetPos() Position
 	InstantiateNumCompExpr(int, int) InstNumComparison
+	ConstantSubsNumCompExpr(spec *Spec) NumComparison
 }
 
 type NumComparisonVisitor interface {
@@ -139,6 +140,7 @@ type NumExpr interface {
 	Sprint() string
 	GetPos() Position
 	InstantiateNumExpr(int, int) InstNumExpr
+	ConstantSubsNumExpr(spec *Spec) NumExpr
 }
 
 type NumExprVisitor interface {
