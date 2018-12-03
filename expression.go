@@ -52,9 +52,11 @@ type ConstExpr struct { // implements Expr,NumExpr,BooleanExpr
 }
 
 type LetExpr struct {
-	Name StreamName
-	Bind Expr
-	Body Expr
+	Name   StreamName
+	Params []StreamName
+	Result *StreamType
+	Bind   Expr
+	Body   Expr
 }
 type IfThenElseExpr struct { // implements Expr,NumExpr,BoolExpr
 	If   Expr
@@ -145,9 +147,11 @@ func (this ConstExpr) Sprint() string {
 }
 
 func (this LetExpr) Sprint() string {
+	params := fmt.Sprintf("%v", this.Params)
+	result := this.Result.Sprint()
 	bind := this.Bind.Sprint()
-	body := this.Bind.Sprint()
-	return fmt.Sprintf("let %s = %s in %s", this.Name, bind, body)
+	body := this.Body.Sprint()
+	return fmt.Sprintf("let %s %s = %s :: %s in %s", this.Name, params, bind, result, body)
 }
 func (this IfThenElseExpr) Sprint() string {
 	if_part := this.If.Sprint()
@@ -200,9 +204,14 @@ func NewIfThenElseExpr(p, a, b interface{}) IfThenElseExpr {
 	return IfThenElseExpr{p.(Expr), a.(Expr), b.(Expr)}
 }
 
-func NewLetExpr(n, e, b interface{}) LetExpr {
+func NewLetExpr(n, p, e, b interface{}) LetExpr {
 	name := getStreamName(n)
-	return LetExpr{name, e.(Expr), b.(Expr)}
+	p2 := ToSlice(p)
+	params := make([]StreamName, 0)
+	for _, param := range p2 {
+		params = append(params, getStreamName(param))
+	}
+	return LetExpr{name, params, nil, e.(Expr), b.(Expr)} //Result type will be assigned in TypeVisitor
 }
 func NewStringExpr(s interface{}) StringExpr {
 	return StringExpr{s.(StrExpr)}

@@ -278,11 +278,15 @@ func GetSpec(filename, prefix string) (*Spec, error) {
 
 func SubsConstants(spec *Spec) *Spec {
 	//fmt.Print(PrettyPrintSpec(spec, "[subsconstants]"))
+	/*for _, c := range spec.Const { //we first simplify constant expressions, though it is not mandatory, but will improve performance
+		e := SimplifyExpr(c.Val.InstantiateExpr(0, 0))
+		spec.Const[c.Name] = ConstDecl{c.Name, c.Type, e, c.Pos}
+	}*/
 	for _, c := range spec.Const { //we susbtitute constants used in other constants
 		e := c.Val.ConstantSubs(spec)
 		spec.Const[c.Name] = ConstDecl{c.Name, c.Type, e, c.Pos}
 	}
-	for _, o := range spec.Output {
+	for _, o := range spec.Output { //we substitute constant in stream expressions
 		e := o.Expr.ConstantSubs(spec)
 		spec.Output[o.Name] = OutputStream{o.Name, o.Type, o.Eval, e}
 	}

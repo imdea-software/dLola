@@ -14,7 +14,7 @@ func (this ConstExpr) ConstantSubs(spec *Spec) Expr {
 }
 
 func (this LetExpr) ConstantSubs(spec *Spec) Expr {
-	return LetExpr{this.Name, this.Bind.ConstantSubs(spec), this.Body.ConstantSubs(spec)}
+	return LetExpr{this.Name, this.Params, this.Result, this.Bind.ConstantSubs(spec), this.Body.ConstantSubs(spec)}
 }
 func (this IfThenElseExpr) ConstantSubs(spec *Spec) Expr {
 	return IfThenElseExpr{this.If.ConstantSubs(spec), this.Then.ConstantSubs(spec), this.Else.ConstantSubs(spec)}

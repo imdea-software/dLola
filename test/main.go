@@ -2,7 +2,7 @@ package main
 
 import (
 	//	"errors"
-	//"fmt"
+	"fmt"
 	dLola "gitlab.software.imdea.org/luismiguel.danielsson/dLola"
 	"os"
 	"strconv"
@@ -19,10 +19,9 @@ func main() {
 	if ok {
 		mons := dLola.BuildMonitorTopo(spec, past_future, trigger, topo, nmons, tlen)
 		//dLola.Tickn(mons, 4)
-		//prefix := "[dLola_Monitor_Builder]: "
-		//verdict :=
-		dLola.ConvergeCountTrigger(mons)
-		//fmt.Printf("%sVerdict: %s\n", prefix, verdict.Short())
+		prefix := "[dLola_Monitor_Builder]: "
+		verdict := dLola.ConvergeCountTrigger(mons)
+		fmt.Printf("%sVerdict: %s\n", prefix, verdict.Short())
 	}
 }
 

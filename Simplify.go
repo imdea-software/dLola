@@ -1,10 +1,10 @@
 package dLola
 
-/*import (
+import (
 	//	"errors"
 	"fmt"
 	//	"strconv"
-)*/
+)
 
 func SimplifyExpr(exp InstExpr) InstExpr {
 	expSimpl := true
@@ -16,21 +16,66 @@ func SimplifyExpr(exp InstExpr) InstExpr {
 	return exp
 }
 
+//returns the constant if it is indeed a constant and a flag that marks if the expression can be further simplified
+func getConstantBool(exp InstBoolExpr) (InstExpr, bool) {
+	switch c := exp.(type) {
+	case InstTruePredicate:
+		return c, false
+	case InstFalsePredicate:
+		return c, false
+	}
+	return InstBooleanExpr{exp}, true
+}
+func getConstantNum(exp InstNumExpr) (InstExpr, bool) {
+	switch c := exp.(type) {
+	case InstIntLiteralExpr:
+		return c, false
+	case InstFloatLiteralExpr:
+		return c, false
+	}
+	return InstNumericExpr{exp}, true
+}
+func getConstantStr(exp InstStrExpr) (InstExpr, bool) {
+	switch c := exp.(type) {
+	case InstStringLiteralExpr:
+		return c, false
+	}
+	return InstStringExpr{exp}, true
+}
+
+func isGround(exp InstExpr) bool {
+	keepsimp := false
+	if bexp, isbool := exp.(InstBooleanExpr); isbool {
+		_, keepsimp = getConstantBool(bexp.BExpr)
+	}
+	if nexp, isnum := exp.(InstNumericExpr); isnum {
+		_, keepsimp = getConstantNum(nexp.NExpr)
+	}
+	if sexp, isstr := exp.(InstStringExpr); isstr {
+		_, keepsimp = getConstantStr(sexp.StExpr)
+	}
+	return !keepsimp
+}
+
 //Simplify
 func (this InstConstExpr) Simplify() (InstExpr, bool) {
 	return this, false
 }
 func (this InstLetExpr) Simplify() (InstExpr, bool) {
 	bind, simplbind := this.Bind.Simplify()
+	if isGround(bind) {
+		fmt.Printf("Bind is ground %s\n", bind.Sprint())
+		bodySub := this.Body.Substitute(InstStreamFetchExpr{this.Name, 0}, bind) //tick of the binding in a let expression should be 0
+		return bodySub.Simplify()                                                //we remove a bind of the let expr, simplifying it
+	}
 	body, simplbody := this.Body.Simplify()
 	return InstLetExpr{this.Name, bind, body}, simplbind || simplbody
 }
 func (this InstIfThenElseExpr) Simplify() (InstExpr, bool) {
 	//fmt.Printf("Simplifying IF: %s\n", this.Sprint())
-	i, _ := this.If.Simplify()
-	ib := i.(InstBooleanExpr).BExpr
-	_, tbranch := ib.(InstTruePredicate)
-	_, fbranch := ib.(InstFalsePredicate)
+	i, _ := this.If.Simplify() //will be InstTrue/FalsePredicate or InstBooleanExpr if the If could not be resolved
+	_, tbranch := i.(InstTruePredicate)
+	_, fbranch := i.(InstFalsePredicate)
 	//fmt.Printf("Simplifying IF condition simplified of type: %T\n", i)
 	if tbranch {
 		//fmt.Printf("Simplifying IF then branch: %s\n", i.Sprint())
@@ -53,25 +98,19 @@ func (this InstStreamOffsetExpr) Simplify() (InstExpr, bool) {
 }
 func (this InstBooleanExpr) Simplify() (InstExpr, bool) {
 	b, simpl := this.BExpr.SimplifyBool()
-	return InstBooleanExpr{b}, simpl
+	c, keepsimpl := getConstantBool(b)
+	return c, simpl && keepsimpl
 }
 func (this InstNumericExpr) Simplify() (InstExpr, bool) {
 	//fmt.Printf("Simplifying Numeric expression: %s\n", this.Sprint())
 	n, simpl := this.NExpr.SimplifyNum()
-	switch c := n.(type) {
-	case InstIntLiteralExpr:
-		return c, false
-	case InstFloatLiteralExpr:
-		return c, false
-	}
-	return InstNumericExpr{n}, simpl
+	c, keepsimpl := getConstantNum(n)
+	return c, simpl && keepsimpl
 }
 func (this InstStringExpr) Simplify() (InstExpr, bool) {
 	s, simpl := this.StExpr.SimplifyStr()
-	if c, ok := s.(InstStringLiteralExpr); ok {
-		return c, simpl
-	}
-	return InstStringExpr{s}, simpl
+	c, keepsimpl := getConstantStr(s)
+	return c, simpl && keepsimpl
 }
 
 //Boolean

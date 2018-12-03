@@ -10,6 +10,7 @@ type InstExpr interface {
 	Sprint() string
 	Substitute(InstStreamExpr, InstExpr) InstExpr
 	Simplify() (InstExpr, bool)
+	Udependencies(adj []Adj, depen map[InstStreamExpr]struct{})
 }
 type InstConstExpr struct { // implements Expr,NumExpr,BoolExpr
 	Name StreamName
@@ -45,6 +46,7 @@ type InstStreamExpr interface {
 	SubstituteBool(InstStreamExpr, InstExpr) InstBoolExpr
 	SubstituteNum(InstStreamExpr, InstExpr) InstNumExpr
 	SubstituteStr(InstStreamExpr, InstExpr) InstStrExpr
+	Udependencies(adj []Adj, depen map[InstStreamExpr]struct{})
 	GetName() StreamName
 	GetTick() int
 	Eq(InstStreamExpr) bool
@@ -100,6 +102,7 @@ type InstBoolExpr interface {
 	Sprint() string
 	SubstituteBool(InstStreamExpr, InstExpr) InstBoolExpr
 	SimplifyBool() (InstBoolExpr, bool)
+	UdependenciesBool(adj []Adj, depen map[InstStreamExpr]struct{})
 }
 type InstTruePredicate struct{ Pos Position }
 type InstFalsePredicate struct{ Pos Position }
@@ -131,6 +134,7 @@ type InstNumComparison interface {
 	Sprint() string
 	SubstituteNumComp(InstStreamExpr, InstExpr) InstNumComparison
 	SimplifyNumComp() (InstBoolExpr, bool)
+	UdependenciesNumComp(adj []Adj, depen map[InstStreamExpr]struct{})
 }
 type InstNumLess struct {
 	Left  InstNumExpr
@@ -161,6 +165,7 @@ type InstNumExpr interface {
 	Sprint() string
 	SubstituteNum(InstStreamExpr, InstExpr) InstNumExpr
 	SimplifyNum() (InstNumExpr, bool)
+	UdependenciesNum(adj []Adj, depen map[InstStreamExpr]struct{})
 }
 type InstIntLiteralExpr struct {
 	Num int
@@ -192,6 +197,7 @@ type InstStrExpr interface {
 	Sprint() string
 	SubstituteStr(InstStreamExpr, InstExpr) InstStrExpr
 	SimplifyStr() (InstStrExpr, bool)
+	UdependenciesStr(adj []Adj, depen map[InstStreamExpr]struct{})
 }
 type InstStringLiteralExpr struct {
 	S string
@@ -206,6 +212,7 @@ type InstStrComparison interface {
 	Sprint() string
 	SubstituteStrComp(InstStreamExpr, InstExpr) InstStrComparison
 	SimplifyStrComp() (InstBoolExpr, bool)
+	UdependenciesStrComp(adj []Adj, depen map[InstStreamExpr]struct{})
 }
 type InstStrEqExpr struct {
 	Left  InstStrExpr
@@ -216,7 +223,16 @@ func (this ConstExpr) InstantiateExpr(tick, tlen int) InstExpr {
 	return InstConstExpr{this.Name, this.Pos}
 }
 func (this LetExpr) InstantiateExpr(tick, tlen int) InstExpr {
-	return InstLetExpr{this.Name, this.Bind.InstantiateExpr(tick, tlen), this.Body.InstantiateExpr(tick, tlen)}
+	//fmt.Printf("Instantiating expr %s\n", this.Sprint())
+	bind := SimplifyExpr(this.Bind.InstantiateExpr(tick, tlen))
+	body := this.Body.InstantiateExpr(tick, tlen) //recursive call
+	if isGround(bind) {
+		//fmt.Printf("Bind is ground %s\n", bind.Sprint())
+		bodySub := body.Substitute(InstStreamFetchExpr{this.Name, 0}, bind)
+		return SimplifyExpr(bodySub) //we remove a bind of the let expr, simplifying it
+	}
+	body = SimplifyExpr(body)
+	return InstLetExpr{this.Name, bind, body}
 }
 func (this IfThenElseExpr) InstantiateExpr(tick, tlen int) InstExpr {
 	return InstIfThenElseExpr{this.If.InstantiateExpr(tick, tlen), this.Then.InstantiateExpr(tick, tlen), this.Else.InstantiateExpr(tick, tlen)}
@@ -389,7 +405,7 @@ func (this InstConstExpr) Sprint() string {
 }
 func (this InstLetExpr) Sprint() string {
 	bind := this.Bind.Sprint()
-	body := this.Bind.Sprint()
+	body := this.Body.Sprint()
 	return fmt.Sprintf("let %s = %s in %s", this.Name, bind, body)
 }
 func (this InstIfThenElseExpr) Sprint() string {

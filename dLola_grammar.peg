@@ -43,7 +43,7 @@ LazyEval <- LAZY { return false, nil }
     return NewOutputDecl(n,t),nil	  
 }*/
 
-Block <- LET n:Name ASSIGN e:Expr IN b:Block { return NewLetExpr(n,e,b),nil }
+Block <- LET n:Name p:(Name*) ASSIGN e:Expr IN b:Block { return NewLetExpr(n,p,e,b),nil }
        / e:Expr                                  { return e,nil }
 
 Expr <- IF p:BooleanExpr THEN a:Expr ELSE b:Expr { return NewIfThenElseExpr(p,a,b),nil }
@@ -188,13 +188,16 @@ BasicStrExpr <- '(' _? s:StrExpr ')' _? { return s,nil }
 
 /*Atoms used for each theory(type)*/
 AtomicBool <- co:ConstBool		    { return co, nil}
-	      / e:StreamExpr !OtherOp         { return NewStreamOffsetExpr(e),nil } //IMPORTANT: !NumOp will make sure that this expression is only matched when not followed by a Numeric Operation, in order to correctly parse numeric expressions through NumExpr
+	      / e:StreamExpr !OtherOp       { return NewStreamOffsetExpr(e),nil } //IMPORTANT: !NumOp will make sure that this expression is only matched when not followed by a Numeric Operation, in order to correctly parse numeric expressions through NumExpr
+	      / f:FuncApp    		    {return f, nil}
 
 AtomicNum <-  e:StreamExpr              { return NewStreamOffsetExpr(e),nil }
-       	      / co:ConstNum		    { return co, nil}
+       	      / co:ConstNum		{ return co, nil}
+	      / f:FuncApp 		{return f, nil}
 
 AtomicStr <-  e:StreamExpr              { return NewStreamOffsetExpr(e),nil }
-       	      / co:ConstStr		    { return co, nil}
+       	      / co:ConstStr		{ return co, nil}
+	      / f:FuncApp 		{return f, nil}
 
 /*Streams are generic*/
 StreamExpr <- n:Name "[" _? t:OffsetExpr "|" _? co:Constant "]" _? { return NewStreamFetchExpr(n,t,co, c.pos),nil }
@@ -218,6 +221,10 @@ ConstStr <- l:QuotedString _?          { return l,nil }
 
 ConstExpr <- n:Name { return n,nil } 
 
+FuncApp <- n:Name "(" p:(ActualParams) ")"
+
+ActualParams <- e:Expr "," a:ActualParams
+	     	/ e:Expr
 
 NumLiteral <- p:(('-')?[0-9]+('.'[0-9]+)?) {
 	      if strings.Contains(string(c.text), ".") {

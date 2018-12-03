@@ -273,8 +273,15 @@ func Tickn(mons map[Id]*Monitor, nticks int) {
 
 func Tick(mons map[Id]*Monitor) {
 	//fmt.Printf("Tick mons:%s\n", PrintMons(mons))
+	cMons := make(chan *Monitor)
+	nmons := len(mons)
 	for _, m := range mons {
-		m.process()
+		//m.process()       //sequential
+		go processMon(m, cMons) //process thread-safe
+	}
+	for i := 0; i < nmons; i++ { //retrieve the processed monitors
+		newMon := <-cMons
+		mons[newMon.nid] = newMon //write back to the map
 	}
 	for _, m := range mons {
 		//fmt.Printf("Before dispatch of mon %d:%s\n", m.nid, PrintMons(mons))
@@ -282,6 +289,11 @@ func Tick(mons map[Id]*Monitor) {
 		//fmt.Printf("After dispatching of mon %d:%s\n", m.nid, PrintMons(mons))
 	}
 	//fmt.Printf("TICKED mons:%s\n", PrintMons(mons))
+}
+
+func processMon(m *Monitor, cMons chan *Monitor) {
+	m.process()
+	cMons <- m
 }
 
 func (m *Monitor) dispatch(mons map[Id]*Monitor) {
@@ -322,7 +334,6 @@ func (m *Monitor) processQ() {
 				m.pen = append(m.pen, msg)
 			case Trigger:
 				m.pen = append(m.pen, msg)
-
 			}
 		}
 	}
@@ -463,20 +474,43 @@ func (m *Monitor) addReq() {
 
 func createReqMsgsPen(stream InstStreamExpr, m *Monitor) {
 	//fmt.Printf("Creating REQS\n")
-	adjacencies := m.depGraph[stream.GetName()]
-	dependencies := convertToStreams(stream, adjacencies, m.tracelen)
+	dependencies := obtainDependencies(stream, m)
 	for i := 0; i < len(dependencies); i++ {
 		depStream := dependencies[i]
 		//fmt.Printf("Adjacency %s\n", adj.Sprint())
 		createReqStream(depStream, m)
 		_, resolved := m.r[depStream]
 		if !resolved {
-			dependencies = addNextLevelDependencies(dependencies, convertToStreams(depStream, m.depGraph[depStream.GetName()], m.tracelen), m.r)
+			dependencies = addNextLevelDependencies(dependencies, obtainDependencies(depStream, m), m.r)
 		}
 		//fmt.Printf("next level dependencies after: %s\n", SprintStreams(dependencies))
 	}
 }
 
+func obtainDependencies(stream InstStreamExpr, m *Monitor) []InstStreamExpr {
+	var dependencies []InstStreamExpr
+	adjacencies := m.depGraph[stream.GetName()]
+	uExpr, unresolved := m.u[stream]
+	if unresolved { //get actual needed dependencies taking into account what was simplified
+		dependencies = getUdependencies(stream, adjacencies, uExpr.exp)
+	} else { //get the dependencies from the spec and analyze next level dependencies
+		dependencies = convertToStreams(stream, adjacencies, m.tracelen)
+	} //othw should be resolved and the msg should have been responded in the addRes phase
+	return dependencies
+}
+
+//will create a req msg for depStream and add it to out iff the stream is not in R, assigned to other monitor(delta), not previously requested, not eval and have been instanced
+func createReqStream(depStream InstStreamExpr, m *Monitor) {
+	_, resolved := m.r[depStream]
+	_, requested := m.req[depStream]
+	//fmt.Printf("Dependency could be intantiated tlen: %d\n%s\n !resolved %t, !requested %t, !eval %t, assigned to other monitor: %t\n", m.tracelen, depStream.Sprint(), !resolved, !requested, !m.expr.Output[depStream.GetName()].Eval, m.delta[depStream.GetName()] != m.nid)
+	if !resolved && m.delta[depStream.GetName()] != m.nid && !m.expr.Output[depStream.GetName()].Eval && !requested && depStream.GetTick() <= m.t { //not in R, not assigned to this monitor, not eval and not already requested, allow request of streams that have not yet been instanced?
+		//fmt.Printf("Creatting Request: %s\n", depStream.Sprint())
+		msg := createMsg(depStream, nil, m.nid, m.delta[depStream.GetName()])
+		m.sendMsg(msg)
+		m.req[depStream] = struct{}{} //mark it as requested
+	}
+}
 func convertToStreams(stream InstStreamExpr, adjacencies []Adj, tlen int) []InstStreamExpr {
 	r := make([]InstStreamExpr, 0)
 	for _, adj := range adjacencies {
@@ -489,20 +523,7 @@ func convertToStreams(stream InstStreamExpr, adjacencies []Adj, tlen int) []Inst
 	return r
 }
 
-/*will create a req msg for depStream and add it to out iff the stream is not in R, assigned to other monitor(delta), not previously requested, not eval and have been instanced*/
-func createReqStream(depStream InstStreamExpr, m *Monitor) {
-	_, resolved := m.r[depStream]
-	_, requested := m.req[depStream]
-	//fmt.Printf("Dependency could be intantiated tlen: %d\n%s\n !resolved %t, !requested %t, !eval %t, assigned to other monitor: %t\n", m.tracelen, depStream.Sprint(), !resolved, !requested, !m.expr.Output[depStream.GetName()].Eval, m.delta[depStream.GetName()] != m.nid)
-	if !resolved && m.delta[depStream.GetName()] != m.nid && !m.expr.Output[depStream.GetName()].Eval && !requested && depStream.GetTick() <= m.t { //not in R, not assigned to this monitor, not eval and not already requested, allow request of streams that have not yet been instanced?
-		//fmt.Printf("Creatting Request: %s\n", depStream.Sprint())
-		msg := createMsg(depStream, nil, m.nid, m.delta[depStream.GetName()])
-		m.sendMsg(msg)
-		m.req[depStream] = struct{}{} //mark it as requested
-	}
-}
-
-/*will change dependencies*/
+//will change dependencies
 func addNextLevelDependencies(dependencies, candidates []InstStreamExpr, r RSet) []InstStreamExpr {
 	//fmt.Printf("next level dependencies before: %s\ncandidates: %s\n", SprintStreams(dependencies), SprintStreams(candidates))
 	for _, c := range candidates {
