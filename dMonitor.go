@@ -112,6 +112,7 @@ type Resp struct {
 	eval        Eval
 	resTime     Time
 	simplRounds SimplRounds
+	ttl         Time
 } //result, Eval|Lazy, time at which the result was obtained, #of calls to simplExp
 type Resolved struct {
 	stream InstStreamExpr
@@ -155,6 +156,7 @@ type Monitor struct {
 	depGraph       DepGraphAdj         //dependencies among streams
 	dep            map[StreamName][]Id //Monitors that need the value of the stream (should be coherent to delta)
 	trigger        []Resolved
+	ttlMap         map[StreamName]Time //ttl of each resolved stream (in R), will be decremented in each tick, when 0 it will be removed AT START >=1
 }
 
 func (n Monitor) String() string {
@@ -194,8 +196,8 @@ func PrintMons(ms map[Id]*Monitor) string {
 	return s
 }
 
-func NewMonitor(id, tracelen int, s Spec, received Received, routes map[Id]Id, delta map[StreamName]Id, depGraph DepGraphAdj, dep map[StreamName][]Id, inputChannels []chan Resolved) Monitor {
-	return Monitor{id, received, inputChannels, make(USet), make(RSet), s, Pending{}, Output{}, Requested{}, 0, routes, delta, tracelen, 0, 0, 0, depGraph, dep, make([]Resolved, 0)}
+func NewMonitor(id, tracelen int, s Spec, received Received, routes map[Id]Id, delta map[StreamName]Id, depGraph DepGraphAdj, dep map[StreamName][]Id, inputChannels []chan Resolved, ttlMap map[StreamName]Time) Monitor {
+	return Monitor{id, received, inputChannels, make(USet), make(RSet), s, Pending{}, Output{}, Requested{}, 0, routes, delta, tracelen, 0, 0, 0, depGraph, dep, make([]Resolved, 0), ttlMap}
 }
 
 type Verdict struct {
@@ -240,13 +242,15 @@ func ConvergeCountTrigger(mons map[Id]*Monitor) Verdict {
 func Converge(mons map[Id]*Monitor) {
 	allfinished := false
 	anytriggered := false
+	cMons, cTicks := prepareMonitors(mons)
 	//fmt.Printf("Converge: %s\n", PrintMons(mons))
 	for !(anytriggered || allfinished) {
 		//fmt.Printf("Should continue converging\n")
-		Tick(mons)
+		Tick(mons, cMons, cTicks)
 		anytriggered, allfinished = ShouldContinue(mons)
 		//fmt.Printf("Should continue converging because %t, %t\n", anytriggered, allfinished)
 	}
+	close(cTicks) //so go routines can shutdown properly
 	//fmt.Printf("Finished\n")
 	return
 
@@ -266,43 +270,72 @@ func ShouldContinue(mons map[Id]*Monitor) (bool, bool) {
 }
 
 func Tickn(mons map[Id]*Monitor, nticks int) {
+	cMons, cTicks := prepareMonitors(mons)
 	for i := 0; i < nticks; i++ {
-		Tick(mons)
+		Tick(mons, cMons, cTicks)
 	}
 }
 
-func Tick(mons map[Id]*Monitor) {
-	//fmt.Printf("Tick mons:%s\n", PrintMons(mons))
-	cMons := make(chan *Monitor)
-	nmons := len(mons)
+func prepareMonitors(mons map[Id]*Monitor) (chan *Monitor, chan struct{}) {
+	cMons := make(chan *Monitor, len(mons))
+	cTicks := make(chan struct{}, len(mons))
 	for _, m := range mons {
 		//m.process()       //sequential
-		go processMon(m, cMons) //process thread-safe
+		go processMon(m, cMons, cTicks) //process thread-safe
 	}
+	return cMons, cTicks
+}
+
+func Tick(mons map[Id]*Monitor, cMons chan *Monitor, cTicks chan struct{}) {
+	//fmt.Printf("Tick mons:%s\n", PrintMons(mons))
+	nmons := len(mons)
+	for i := 0; i < nmons; i++ {
+		//fmt.Printf("Creating tick :%d\n", i)
+		cTicks <- struct{}{} //NON-BLOCKING
+	}
+	incomingQs := make(map[Id][]Msg)
 	for i := 0; i < nmons; i++ { //retrieve the processed monitors
-		newMon := <-cMons
+		newMon := <-cMons //BLOCKING if empty, non-blocking while it has elements
+		classifyOut(newMon, incomingQs)
 		mons[newMon.nid] = newMon //write back to the map
 	}
-	for _, m := range mons {
+	for nid, m := range mons {
 		//fmt.Printf("Before dispatch of mon %d:%s\n", m.nid, PrintMons(mons))
-		m.dispatch(mons)
+		//m.dispatch(mons, incomingQs)
+		m.q = incomingQs[nid]
 		//fmt.Printf("After dispatching of mon %d:%s\n", m.nid, PrintMons(mons))
 	}
 	//fmt.Printf("TICKED mons:%s\n", PrintMons(mons))
 }
 
-func processMon(m *Monitor, cMons chan *Monitor) {
-	m.process()
-	cMons <- m
+func processMon(m *Monitor, cMons chan *Monitor, cTicks chan struct{}) {
+	open := true
+	for open {
+		_, open = <-cTicks //receive new tick BLOCKING
+		if open {          //tick was received and channel still open
+			//fmt.Printf("Tick received, processing...:%d\n", m.nid)
+			m.process() //process
+			cMons <- m  //send result should be NON-BLOCKING since it is a buffered channel
+		}
+	}
 }
 
-func (m *Monitor) dispatch(mons map[Id]*Monitor) {
+//prepare the msgs classifying them by their nextHop, clear m.out
+func classifyOut(m *Monitor, incomingQs map[Id][]Msg) {
+	for _, msg := range m.out {
+		nextHopMon := m.routes[msg.Dst]                              //we look for the nextHop in the route from m to msg.Dst
+		incomingQs[nextHopMon] = append(incomingQs[nextHopMon], msg) //append msg to the incoming msgs of the destination
+	}
+	m.out = []Msg{} //clear out
+}
+
+/*func (m *Monitor) dispatch(mons map[Id]*Monitor) {
 	for _, msg := range m.out {
 		nextHopMon := m.routes[msg.Dst]                      //we look for the nextHop in the route from m to msg.Dst
 		mons[nextHopMon].q = append(mons[nextHopMon].q, msg) //append msg to the incoming msgs of the destination
 	}
 	m.out = []Msg{}
-}
+}*/
 
 func (m *Monitor) sendMsg(msg Msg) {
 	//fmt.Printf("Sending msg: %s\n", msg.String())
@@ -329,7 +362,7 @@ func (m *Monitor) processQ() {
 		} else {
 			switch msg.Kind {
 			case Res:
-				m.r[msg.Stream] = msgToResp(msg)
+				m.r[msg.Stream] = msgToResp(msg, m.ttlMap)
 			case Req:
 				m.pen = append(m.pen, msg)
 			case Trigger:
@@ -340,8 +373,8 @@ func (m *Monitor) processQ() {
 	m.q = []Msg{}
 }
 
-func msgToResp(msg Msg) Resp {
-	return Resp{*msg.Value, false, *msg.ResTime, *msg.SimplRounds} //received responses are marked as LAZY, so as not to send them again and flood the net!!
+func msgToResp(msg Msg, ttlMap map[StreamName]Time) Resp {
+	return Resp{*msg.Value, false, *msg.ResTime, *msg.SimplRounds, ttlMap[msg.Stream.GetName()]} //received responses are marked as LAZY, so as not to send them again and flood the net!!
 }
 
 func (m *Monitor) readInput() {
@@ -392,7 +425,7 @@ func (m *Monitor) simplify() {
 			und.exp = SimplifyExpr(und.exp)
 			und.simplRounds++
 			m.u[stream] = Und{und.exp, und.eval, und.simplRounds} //store the substituted and simplified expression
-			newresp, isResolved := toResp(m.t, und)
+			newresp, isResolved := toResp(stream, m.t, und, m.ttlMap)
 			if isResolved {
 				//fmt.Printf("[%d]New Resp: %v",m.nid, newresp)
 				m.r[stream] = newresp //add it to R
@@ -403,20 +436,21 @@ func (m *Monitor) simplify() {
 	}
 }
 
-func toResp(t int, und Und) (Resp, bool) {
+func toResp(stream InstStreamExpr, t int, und Und, ttlMap map[StreamName]Time) (Resp, bool) {
 	//fmt.Printf("To Resp: %v\n", und.exp)
 	var r Resp
+	ttl := ttlMap[stream.GetName()]
 	switch und.exp.(type) {
 	case InstTruePredicate:
-		return Resp{und.exp, und.eval, t, und.simplRounds}, true
+		return Resp{und.exp, und.eval, t, und.simplRounds, ttl}, true
 	case InstFalsePredicate:
-		return Resp{und.exp, und.eval, t, und.simplRounds}, true
+		return Resp{und.exp, und.eval, t, und.simplRounds, ttl}, true
 	case InstIntLiteralExpr:
-		return Resp{und.exp, und.eval, t, und.simplRounds}, true
+		return Resp{und.exp, und.eval, t, und.simplRounds, ttl}, true
 	case InstFloatLiteralExpr:
-		return Resp{und.exp, und.eval, t, und.simplRounds}, true
+		return Resp{und.exp, und.eval, t, und.simplRounds, ttl}, true
 	case InstStringLiteralExpr:
-		return Resp{und.exp, und.eval, t, und.simplRounds}, true
+		return Resp{und.exp, und.eval, t, und.simplRounds, ttl}, true
 	default:
 		//fmt.Printf("Not resolved")
 		return r, false
@@ -435,8 +469,13 @@ func (m *Monitor) addRes() {
 						m.sendMsg(msg)
 					}
 				}
-				m.r[stream] = Resp{resp.value, false, resp.resTime, resp.simplRounds} //we mark the resp as already sent to interested monitors
+				m.r[stream] = Resp{resp.value, false, resp.resTime, resp.simplRounds, m.ttlMap[stream.GetName()]} //we mark the resp as already sent to interested monitors
 			}
+		}
+		if resp.ttl-1 == 0 {
+			delete(m.r, stream)
+		} else {
+			m.r[stream] = Resp{resp.value, resp.eval, resp.resTime, resp.simplRounds, resp.ttl - 1}
 		}
 	}
 	newPen := make([]Msg, 0)

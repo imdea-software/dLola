@@ -171,6 +171,16 @@ func getArms(nmons int) int {
 	return arms
 }
 
+func dist(src, dst Id, routes map[Id]map[Id]Id) int {
+	curr := src
+	dist := 0
+	for curr != dst {
+		curr = routes[curr][dst]
+		dist++
+	}
+	return dist
+}
+
 func InterestedMonitors(delta map[StreamName]Id, depGraph DepGraphAdj) map[StreamName][]Id {
 	monitorDependencies := make(map[StreamName][]Id)
 	for stream, mon := range delta {
@@ -234,7 +244,7 @@ func RootStream(s StreamName, depGraph DepGraphAdj) bool {
 	return root
 }
 
-func GenerateChannels(delta map[StreamName]Id, spec *Spec, depGraph DepGraphAdj, id Id, tlen int) []chan Resolved {
+func GenerateChannels(delta map[StreamName]Id, spec *Spec, depGraph DepGraphAdj, id Id, tlen int, ttlMap map[StreamName]Time) []chan Resolved {
 	channels := make([]chan Resolved, 0)
 	for stream, dependencies := range depGraph {
 		if delta[stream] == id {
@@ -243,7 +253,7 @@ func GenerateChannels(delta map[StreamName]Id, spec *Spec, depGraph DepGraphAdj,
 				if inputDecl, ok := spec.Input[d.Dest]; ok {
 					//fmt.Printf("found input %s for monitor %d\n", d.Dest, id)
 					c := make(chan Resolved)
-					generateInput(d.Dest, inputDecl.Type, c, tlen) //call to inputReader!!! TODO
+					generateInput(d.Dest, inputDecl.Type, c, tlen, ttlMap) //call to inputReader!!! TODO
 					channels = append(channels, c)
 				}
 			}
@@ -252,14 +262,50 @@ func GenerateChannels(delta map[StreamName]Id, spec *Spec, depGraph DepGraphAdj,
 	return channels
 }
 
-func BuildMonitors(tlen, nmons int, spec *Spec, reqs map[Id][]Msg, delta map[StreamName]Id, topo string) map[Id]*Monitor {
+func GenerateTtlMap(depGraph DepGraphAdj, nid Id, delta map[StreamName]Id) map[StreamName]Time {
+	c := 3 //do an analysis in order to specify this quantity considering the longest path in the dependency graph, the width of the topology TODO:ttlMap.go
+	r := make(map[StreamName]Time)
+	for streamName, _ := range depGraph {
+		r[streamName] = c
+	}
+	return r
+}
+
+func GenerateGlobalRoutes(nmons int, topo string) map[Id]map[Id]Id {
+	globalRoutes := make(map[Id]map[Id]Id) //map NodeId to (routetable: destiny to nextHop)
+	for i := 0; i < nmons; i++ {
+		globalRoutes[i] = GenerateRoutes(nmons, i, topo)
+	}
+	return globalRoutes
+}
+
+func ObtainDists(globalRoutes map[Id]map[Id]Id) map[Id]map[Id]Int {
+	dists := make(map[Id]map[Id]Int)
+	for id, routes := range globalRoutes {
+
+	}
+	return dists
+}
+
+func dists(id Id, routes map[Id]Id, dists map[Id]map[Id]Int) { //TODO
+	dists[id][id] = 0
+	for dest, next := range routes {
+		if dest == next {
+			dists[id][dest] = 1
+		} else {
+			dists(next, routes, dists)
+		}
+	}
+}
+
+func BuildMonitors(tlen, nmons int, spec *Spec, reqs map[Id][]Msg, delta map[StreamName]Id, globalRoutes map[Id]map[Id]Id) map[Id]*Monitor {
 	mons := make(map[Id]*Monitor)
 	depGraph := SpecToGraph(spec)
 	dependencies := InterestedMonitors(delta, depGraph)
 	for i := 0; i < nmons; i++ {
-		routes := GenerateRoutes(nmons, i, topo)
-		channels := GenerateChannels(delta, spec, depGraph, i, tlen)
-		mon := NewMonitor(i, tlen, *spec, reqs[i], routes, delta, depGraph, dependencies, channels)
+		ttlMap := GenerateTtlMap(depGraph, i, delta)
+		channels := GenerateChannels(delta, spec, depGraph, i, tlen, ttlMap)
+		mon := NewMonitor(i, tlen, *spec, reqs[i], globalRoutes[i], delta, depGraph, dependencies, channels, ttlMap)
 		mons[i] = &mon
 	}
 	return mons
@@ -272,5 +318,7 @@ func BuildMonitorTopo(spec *Spec, past_future, trigger, topo string, nmons, tlen
 	//fmt.Printf("Delta:%v\n", delta)
 	req := GenerateReqs(spec, past_future, trigger, tlen, delta)
 	//fmt.Printf("Generated Reqs:%v\n", req)
-	return BuildMonitors(tlen, nmons, spec, req, delta, topo)
+	routes := GenerateGlobalRoutes(nmons, topo)
+	dist := ObtainDists(routes)
+	return BuildMonitors(tlen, nmons, spec, req, delta, routes)
 }

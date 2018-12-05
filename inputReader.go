@@ -8,13 +8,13 @@ import (
 	"strconv"
 )
 
-func generateInput(s StreamName, t StreamType, c chan Resolved, tlen int) {
+func generateInput(s StreamName, t StreamType, c chan Resolved, tlen int, ttlMap map[StreamName]Time) {
 	//go readEventFile(s,t,c, onComma, makeResolved)
-	go produceEvent(s, t, c, tlen)
+	go produceEvent(s, t, c, tlen, ttlMap)
 }
 
 /*Produce event instead of reading it*/
-func produceEvent(s StreamName, t StreamType, c chan Resolved, tlen int) {
+func produceEvent(s StreamName, t StreamType, c chan Resolved, tlen int, ttlMap map[StreamName]Time) {
 	var v InstExpr
 	for i := 0; i < tlen; i++ {
 		inststream := InstStreamFetchExpr{s, i}
@@ -33,12 +33,12 @@ func produceEvent(s StreamName, t StreamType, c chan Resolved, tlen int) {
 		default:
 
 		}
-		c <- Resolved{inststream, Resp{v, false, 0, 0}}
+		c <- Resolved{inststream, Resp{v, false, 0, 0, ttlMap[s]}}
 	}
 }
 
 //needs a function to split tokens in the input file and another to parse the token and produce a Resolved
-func readEventFile(s StreamName, t StreamType, c chan Resolved, tokenSeparator func(data []byte, atEOF bool) (advance int, token []byte, err error), tokenToResolved func(s StreamName, t StreamType, token string, tick int) Resolved) {
+func readEventFile(s StreamName, t StreamType, c chan Resolved, tokenSeparator func(data []byte, atEOF bool) (advance int, token []byte, err error), tokenToResolved func(s StreamName, t StreamType, token string, tick int, ttlMap map[StreamName]Time) Resolved, ttlMap map[StreamName]Time) {
 	f, err := os.Open(fmt.Sprintf("traces/%s_%s.in", s.Sprint(), t.Sprint()))
 	if err != nil {
 		panic(err)
@@ -51,7 +51,7 @@ func readEventFile(s StreamName, t StreamType, c chan Resolved, tokenSeparator f
 	for scanner.Scan() { //for each token
 		crude := scanner.Text()
 		//fmt.Printf("%q ", crude)
-		c <- tokenToResolved(s, t, crude, i)
+		c <- tokenToResolved(s, t, crude, i, ttlMap)
 		i++
 	}
 	if err := scanner.Err(); err != nil {
@@ -74,7 +74,7 @@ func onComma(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	return 0, data, bufio.ErrFinalToken
 }
 
-func makeResolved(s StreamName, t StreamType, token string, tick int) Resolved {
+func makeResolved(s StreamName, t StreamType, token string, tick int, ttlMap map[StreamName]Time) Resolved {
 	fmt.Printf("token %s\n", token)
 	inststream := InstStreamFetchExpr{s, tick}
 	var r Resolved
@@ -82,15 +82,15 @@ func makeResolved(s StreamName, t StreamType, token string, tick int) Resolved {
 	case BoolT:
 		b, err := convertToBoolLiteral(token)
 		if !err {
-			r = Resolved{inststream, Resp{b, false, 0, 0}}
+			r = Resolved{inststream, Resp{b, false, 0, 0, ttlMap[s]}}
 		}
 	case NumT:
 		i, err := strconv.Atoi(token)
 		if err == nil {
-			r = Resolved{inststream, Resp{InstIntLiteralExpr{i}, false, 0, 0}}
+			r = Resolved{inststream, Resp{InstIntLiteralExpr{i}, false, 0, 0, ttlMap[s]}}
 		}
 	case StringT:
-		r = Resolved{inststream, Resp{InstStringLiteralExpr{token}, false, 0, 0}}
+		r = Resolved{inststream, Resp{InstStringLiteralExpr{token}, false, 0, 0, ttlMap[s]}}
 	default:
 
 	}
