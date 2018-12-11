@@ -1,7 +1,7 @@
 package dLola
 
 import (
-	//	"fmt"
+	//"fmt"
 	"math"
 )
 
@@ -262,7 +262,7 @@ func GenerateChannels(delta map[StreamName]Id, spec *Spec, depGraph DepGraphAdj,
 	return channels
 }
 
-func GenerateTtlMap(depGraph DepGraphAdj, nid Id, delta map[StreamName]Id) map[StreamName]Time {
+func GenerateTtlMap(depGraph DepGraphAdj, nid Id, delta map[StreamName]Id, dists map[Id]map[Id]int) map[StreamName]Time {
 	c := 3 //do an analysis in order to specify this quantity considering the longest path in the dependency graph, the width of the topology TODO:ttlMap.go
 	r := make(map[StreamName]Time)
 	for streamName, _ := range depGraph {
@@ -279,31 +279,61 @@ func GenerateGlobalRoutes(nmons int, topo string) map[Id]map[Id]Id {
 	return globalRoutes
 }
 
-func ObtainDists(globalRoutes map[Id]map[Id]Id) map[Id]map[Id]Int {
-	dists := make(map[Id]map[Id]Int)
+func ObtainDists(globalRoutes map[Id]map[Id]Id) map[Id]map[Id]int {
+	dists := make(map[Id]map[Id]int)
 	for id, routes := range globalRoutes {
-
+		getDists(id, routes, dists)
 	}
 	return dists
 }
 
-func dists(id Id, routes map[Id]Id, dists map[Id]map[Id]Int) { //TODO
-	dists[id][id] = 0
+func getDists(id Id, routes map[Id]Id, dists map[Id]map[Id]int) {
 	for dest, next := range routes {
-		if dest == next {
-			dists[id][dest] = 1
-		} else {
-			dists(next, routes, dists)
+		if _, ok := dists[id][dest]; !ok {
+			path, acc := walkPath(id, next, dest, dists)
+			putDists(path, acc, dest, dists)
+			//fmt.Printf("dists obtained %v\n", dists)
+			acc = 0 //in the case of reusing known distances this is needed, becasue it will be d*
 		}
+	}
+	//fmt.Printf("out\n")
+}
+
+func walkPath(id, next, dest Id, dists map[Id]map[Id]int) ([]Id, int) {
+	path := make([]Id, 0) //lists of nodes in path from id to dest
+	curr := id
+	acc := 0
+	for curr != dest { //while the path has not arrived to dest
+		path = append(path, curr) //remember the path
+		//fmt.Printf("walking path %v\n", path)
+		if d, ok := dists[curr][dest]; ok { //reuse already known distances
+			acc += d    //*
+			curr = dest //go for another destination
+		} else {
+			acc++
+			curr = next
+		}
+	}
+	return path, acc
+}
+
+func putDists(path []Id, acc int, dest Id, dists map[Id]map[Id]int) {
+	for _, n := range path { //starts with id and ends with the node that we knew the distance to dest, or the previous to dest
+		if _, ok := dists[n]; !ok {
+			dists[n] = make(map[Id]int)
+		}
+		dists[n][dest] = acc
+		acc--
 	}
 }
 
 func BuildMonitors(tlen, nmons int, spec *Spec, reqs map[Id][]Msg, delta map[StreamName]Id, globalRoutes map[Id]map[Id]Id) map[Id]*Monitor {
 	mons := make(map[Id]*Monitor)
+	dists := ObtainDists(globalRoutes)
 	depGraph := SpecToGraph(spec)
 	dependencies := InterestedMonitors(delta, depGraph)
+	ttlMap := getTTLMap(depGraph, delta, dists)
 	for i := 0; i < nmons; i++ {
-		ttlMap := GenerateTtlMap(depGraph, i, delta)
 		channels := GenerateChannels(delta, spec, depGraph, i, tlen, ttlMap)
 		mon := NewMonitor(i, tlen, *spec, reqs[i], globalRoutes[i], delta, depGraph, dependencies, channels, ttlMap)
 		mons[i] = &mon
@@ -316,9 +346,8 @@ func BuildMonitorTopo(spec *Spec, past_future, trigger, topo string, nmons, tlen
 	//fmt.Printf("%sBuilding Monitor...\n", prefix)
 	delta := RoundrDelta(*spec, nmons)
 	//fmt.Printf("Delta:%v\n", delta)
-	req := GenerateReqs(spec, past_future, trigger, tlen, delta)
+	reqs := GenerateReqs(spec, past_future, trigger, tlen, delta)
 	//fmt.Printf("Generated Reqs:%v\n", req)
-	routes := GenerateGlobalRoutes(nmons, topo)
-	dist := ObtainDists(routes)
-	return BuildMonitors(tlen, nmons, spec, req, delta, routes)
+	globalRoutes := GenerateGlobalRoutes(nmons, topo)
+	return BuildMonitors(tlen, nmons, spec, reqs, delta, globalRoutes)
 }

@@ -161,8 +161,8 @@ type Monitor struct {
 
 func (n Monitor) String() string {
 	s := fmt.Sprintf("\n###############\n Node { nid = %d\n q = %s\n i = %v\n u = %v\n r = %s\n expr = %v\n pen = %v\n out = %v\n req = %v\n t = %d\n routes = %v\n delta = %v\n tracelen = %v\n"+
-		" numMsgs = %d\n sumPayload = %d\n redirectedMsgs = %d\n dep = %v\n trigger = %v\n} ################\n",
-		n.nid, n.q, n.i, printU(n.u), printR(n.r), PrettyPrintSpec(&(n.expr), ""), n.pen, n.out, n.req, n.t, n.routes, n.delta, n.tracelen, n.numMsgs, n.sumPayload, n.redirectedMsgs, n.dep, n.trigger)
+		" numMsgs = %d\n sumPayload = %d\n redirectedMsgs = %d\n dep = %v\n trigger = %v\n ttlMap = %v\n} ################\n",
+		n.nid, n.q, n.i, printU(n.u), printR(n.r), PrettyPrintSpec(&(n.expr), ""), n.pen, n.out, n.req, n.t, n.routes, n.delta, n.tracelen, n.numMsgs, n.sumPayload, n.redirectedMsgs, n.dep, n.trigger, n.ttlMap)
 	return s
 }
 func (m Monitor) triggered() bool {
@@ -351,6 +351,7 @@ func (m *Monitor) process() {
 	m.simplify()
 	m.addRes()
 	m.addReq()
+	m.pruneR()
 	m.t++
 }
 
@@ -472,11 +473,6 @@ func (m *Monitor) addRes() {
 				m.r[stream] = Resp{resp.value, false, resp.resTime, resp.simplRounds, m.ttlMap[stream.GetName()]} //we mark the resp as already sent to interested monitors
 			}
 		}
-		if resp.ttl-1 == 0 {
-			delete(m.r, stream)
-		} else {
-			m.r[stream] = Resp{resp.value, resp.eval, resp.resTime, resp.simplRounds, resp.ttl - 1}
-		}
 	}
 	newPen := make([]Msg, 0)
 	for _, penMsg := range m.pen { //LAZY streams need to be requested in order to send responses
@@ -573,4 +569,15 @@ func addNextLevelDependencies(dependencies, candidates []InstStreamExpr, r RSet)
 	}
 	//fmt.Printf("next level dependencies after: %s\n", SprintStreams(dependencies))
 	return dependencies
+}
+
+//R Pruning
+func (m *Monitor) pruneR() {
+	for stream, resp := range m.r {
+		if resp.ttl == 0 {
+			delete(m.r, stream)
+		} else {
+			m.r[stream] = Resp{resp.value, resp.eval, resp.resTime, resp.simplRounds, resp.ttl - 1}
+		}
+	}
 }
