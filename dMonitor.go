@@ -250,7 +250,7 @@ func Converge(mons map[Id]*Monitor) {
 		anytriggered, allfinished = ShouldContinue(mons)
 		//fmt.Printf("Should continue converging because %t, %t\n", anytriggered, allfinished)
 	}
-	close(cTicks) //so go routines can shutdown properly
+	//close(cTicks) //so go routines can shutdown properly
 	//fmt.Printf("Finished\n")
 	return
 
@@ -276,22 +276,24 @@ func Tickn(mons map[Id]*Monitor, nticks int) {
 	}
 }
 
-func prepareMonitors(mons map[Id]*Monitor) (chan *Monitor, chan struct{}) {
+func prepareMonitors(mons map[Id]*Monitor) (chan *Monitor, []chan struct{}) {
 	cMons := make(chan *Monitor, len(mons))
-	cTicks := make(chan struct{}, len(mons))
+	cTicks := make([]chan struct{}, len(mons))
 	for _, m := range mons {
 		//m.process()       //sequential
-		go processMon(m, cMons, cTicks) //process thread-safe
+		ci := make(chan struct{})
+		cTicks[m.nid] = ci
+		go processMon(m, cMons, ci) //process thread-safe
 	}
 	return cMons, cTicks
 }
 
-func Tick(mons map[Id]*Monitor, cMons chan *Monitor, cTicks chan struct{}) {
+func Tick(mons map[Id]*Monitor, cMons chan *Monitor, cTicks []chan struct{}) {
 	//fmt.Printf("Tick mons:%s\n", PrintMons(mons))
 	nmons := len(mons)
 	for i := 0; i < nmons; i++ {
 		//fmt.Printf("Creating tick :%d\n", i)
-		cTicks <- struct{}{} //NON-BLOCKING
+		cTicks[i] <- struct{}{} //BLOCKING: false alternatives: buffered channel(some monitors run so much that stole the ticks of the others), buffered channel + id(each monitor will need to search for their tick: livelock!! REMEMBER in go context swap only occurs when a go routine gets blocked!!)
 	}
 	incomingQs := make(map[Id][]Msg)
 	for i := 0; i < nmons; i++ { //retrieve the processed monitors
@@ -311,7 +313,7 @@ func Tick(mons map[Id]*Monitor, cMons chan *Monitor, cTicks chan struct{}) {
 func processMon(m *Monitor, cMons chan *Monitor, cTicks chan struct{}) {
 	open := true
 	for open {
-		_, open = <-cTicks //receive new tick BLOCKING
+		_, open = <-cTicks //receive new tick BLOCKING, the channel need not be closed since it is not a buffered channel, the go routine will end when the main go routine returns
 		if open {          //tick was received and channel still open
 			//fmt.Printf("Tick received, processing...:%d\n", m.nid)
 			m.process() //process

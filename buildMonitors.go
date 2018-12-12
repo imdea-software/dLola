@@ -1,7 +1,7 @@
 package dLola
 
 import (
-	//"fmt"
+	"fmt"
 	"math"
 )
 
@@ -251,7 +251,7 @@ func GenerateChannels(delta map[StreamName]Id, spec *Spec, depGraph DepGraphAdj,
 			for _, d := range dependencies {
 				//fmt.Printf("%v\n", spec.Input)
 				if inputDecl, ok := spec.Input[d.Dest]; ok {
-					//fmt.Printf("found input %s for monitor %d\n", d.Dest, id)
+					fmt.Printf("found input %s for monitor %d\n", d.Dest, id)
 					c := make(chan Resolved)
 					generateInput(d.Dest, inputDecl.Type, c, tlen, ttlMap) //call to inputReader!!! TODO
 					channels = append(channels, c)
@@ -342,12 +342,12 @@ func BuildMonitors(tlen, nmons int, spec *Spec, reqs map[Id][]Msg, delta map[Str
 }
 
 func BuildMonitorTopo(spec *Spec, past_future, trigger, topo string, nmons, tlen int) map[Id]*Monitor {
-	//prefix := "[dLola_Monitor_Builder]: "
-	//fmt.Printf("%sBuilding Monitor...\n", prefix)
+	prefix := "[dLola_Monitor_Builder]: "
+	fmt.Printf("%sBuilding Monitor...\n", prefix)
 	delta := RoundrDelta(*spec, nmons)
-	//fmt.Printf("Delta:%v\n", delta)
+	fmt.Printf("Delta:%v\n", delta)
 	reqs := GenerateReqs(spec, past_future, trigger, tlen, delta)
-	//fmt.Printf("Generated Reqs:%v\n", req)
+	//fmt.Printf("Generated Reqs:%v\n", reqs)
 	globalRoutes := GenerateGlobalRoutes(nmons, topo)
 	return BuildMonitors(tlen, nmons, spec, reqs, delta, globalRoutes)
 }

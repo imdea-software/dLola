@@ -2,7 +2,7 @@ package dLola
 
 import (
 	//	"errors"
-	"fmt"
+	//"fmt"
 	"math"
 	//	"strconv"
 )
@@ -36,7 +36,7 @@ func getStreamTtl(streamName StreamName, reverseDepen RevDepGraph, delta map[Str
 	if _, in := ttlMap[streamName]; !in {
 		if revDepends, ok := reverseDepen[streamName]; ok {
 			for _, revDep := range revDepends { //revDep.Src == streamName
-				fmt.Printf("revDep %s\n", revDep.Sprint())
+				//fmt.Printf("revDep %s\n", revDep.Sprint())
 				ttl := -revDep.Weight //consider both positives & negatives shifts (positives need to be considered because of distances between computing monitors)
 				if revDep.Dest != streamName {
 					ttl += dists[delta[streamName]][delta[revDep.Dest]]
