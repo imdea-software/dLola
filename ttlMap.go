@@ -29,6 +29,8 @@ This function is suitable for:
 Eager: Resolver(revDep is local so won't use distance) Receiver(revDep is local so won't use distance)
 Lazy: Resolver (revDep is remote so will use distance or local and won't use it) & Receiver(revDep is local so won't use distance)
 Eager Resolver(revDep is remote so will send msg and forget) will use 1 or 0
+
+Ttl(s) = Max(0, {-w | r --w-> s}) + dist(delta[r], delta[s])
 */
 func getStreamTtl(streamName StreamName, reverseDepen RevDepGraph, delta map[StreamName]Id, ttlMap TTLMap, dists map[Id]map[Id]int) {
 	//fmt.Printf("getStreamTTL: %s\n", streamName)
@@ -39,7 +41,7 @@ func getStreamTtl(streamName StreamName, reverseDepen RevDepGraph, delta map[Str
 				//fmt.Printf("revDep %s\n", revDep.Sprint())
 				ttl := -revDep.Weight //consider both positives & negatives shifts (positives need to be considered because of distances between computing monitors)
 				if revDep.Dest != streamName {
-					ttl += dists[delta[streamName]][delta[revDep.Dest]]
+					ttl += dists[delta[revDep.Dest]][delta[streamName]] //IMPORTANT: distance for the request(Lazy) to arrive
 				}
 				max = math.Max(max, float64(ttl))
 			}

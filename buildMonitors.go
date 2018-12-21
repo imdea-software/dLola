@@ -1,7 +1,7 @@
 package dLola
 
 import (
-	"fmt"
+	//"fmt"
 	"math"
 )
 
@@ -251,7 +251,7 @@ func GenerateChannels(delta map[StreamName]Id, spec *Spec, depGraph DepGraphAdj,
 			for _, d := range dependencies {
 				//fmt.Printf("%v\n", spec.Input)
 				if inputDecl, ok := spec.Input[d.Dest]; ok {
-					fmt.Printf("found input %s for monitor %d\n", d.Dest, id)
+					//fmt.Printf("found input %s for monitor %d\n", d.Dest, id)
 					c := make(chan Resolved)
 					generateInput(d.Dest, inputDecl.Type, c, tlen, ttlMap) //call to inputReader!!! TODO
 					channels = append(channels, c)
@@ -327,27 +327,29 @@ func putDists(path []Id, acc int, dest Id, dists map[Id]map[Id]int) {
 	}
 }
 
-func BuildMonitors(tlen, nmons int, spec *Spec, reqs map[Id][]Msg, delta map[StreamName]Id, globalRoutes map[Id]map[Id]Id) map[Id]*Monitor {
+func BuildMonitors(tlen int, specDeploy *SpecDeploy, reqs map[Id][]Msg) map[Id]*Monitor {
 	mons := make(map[Id]*Monitor)
-	dists := ObtainDists(globalRoutes)
-	depGraph := SpecToGraph(spec)
+	nmons := specDeploy.Nmons
+	delta := specDeploy.Delta
+	dists := ObtainDists(specDeploy.GlobalRoutes)
+	depGraph := SpecToGraph(specDeploy.Spec)
 	dependencies := InterestedMonitors(delta, depGraph)
 	ttlMap := getTTLMap(depGraph, delta, dists)
 	for i := 0; i < nmons; i++ {
-		channels := GenerateChannels(delta, spec, depGraph, i, tlen, ttlMap)
-		mon := NewMonitor(i, tlen, *spec, reqs[i], globalRoutes[i], delta, depGraph, dependencies, channels, ttlMap)
+		channels := GenerateChannels(delta, specDeploy.Spec, depGraph, i, tlen, ttlMap)
+		mon := NewMonitor(i, tlen, *specDeploy.Spec, reqs[i], specDeploy.GlobalRoutes[i], delta, depGraph, dependencies, channels, ttlMap)
 		mons[i] = &mon
 	}
 	return mons
 }
 
-func BuildMonitorTopo(spec *Spec, past_future, trigger, topo string, nmons, tlen int) map[Id]*Monitor {
-	prefix := "[dLola_Monitor_Builder]: "
-	fmt.Printf("%sBuilding Monitor...\n", prefix)
-	delta := RoundrDelta(*spec, nmons)
-	fmt.Printf("Delta:%v\n", delta)
-	reqs := GenerateReqs(spec, past_future, trigger, tlen, delta)
+func BuildMonitorTopo(specDeploy *SpecDeploy, past_future, trigger string, tlen int) map[Id]*Monitor {
+	//prefix := "[dLola_Monitor_Builder]: "
+	//fmt.Printf("%sBuilding Monitor...\n", prefix)
+	//delta := RoundrDelta(*spec, nmons)
+	//fmt.Printf("Delta:%v\n", delta)
+	reqs := GenerateReqs(specDeploy.Spec, past_future, trigger, tlen, specDeploy.Delta)
 	//fmt.Printf("Generated Reqs:%v\n", reqs)
-	globalRoutes := GenerateGlobalRoutes(nmons, topo)
-	return BuildMonitors(tlen, nmons, spec, reqs, delta, globalRoutes)
+	//globalRoutes := GenerateGlobalRoutes(nmons, topo)
+	return BuildMonitors(tlen, specDeploy, reqs)
 }

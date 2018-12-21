@@ -3,6 +3,7 @@ package dLola
 import (
 	//	"errors"
 	"fmt"
+	"math"
 	//	"strconv"
 )
 
@@ -119,9 +120,10 @@ type Resolved struct {
 	resp   Resp
 }
 type Und struct {
-	exp         InstExpr
-	eval        Eval
-	simplRounds SimplRounds
+	exp          InstExpr
+	eval         Eval
+	simplRounds  SimplRounds
+	simplifiable bool //will be set to true at initialization and whenever something gets substituted, othw it will be false to avoid trying to simplify over and over the same expression without changes
 }
 type Unresolved struct {
 	stream InstStreamExpr
@@ -174,7 +176,7 @@ func (m Monitor) finished() bool {
 func printU(u USet) string {
 	s := "map:["
 	for istream, und := range u {
-		s += fmt.Sprintf("%s : {%s, %t, %d}; ", istream.Sprint(), und.exp.Sprint(), und.eval, und.simplRounds)
+		s += fmt.Sprintf("%s : {%s, %t, %d}; ", istream.Sprint(), und.exp.Sprint(), und.eval, und.simplRounds, und.simplifiable)
 	}
 	s += "]"
 	return s
@@ -203,15 +205,23 @@ func NewMonitor(id, tracelen int, s Spec, received Received, routes map[Id]Id, d
 type Verdict struct {
 	mons                                    map[Id]*Monitor
 	totalMsgs, totalPayload, totalRedirects int
-	maxdelay, maxSimplRounds                Resolved
+	maxDelay, maxSimplRounds                *Resolved
 	triggers                                []Resolved
 }
 
 func (v Verdict) String() string {
-	return fmt.Sprintf("Verdict{mons = %s\ntotalMsgs: %d totalPayload: %d totalRedirects: %d, maxdelay %v, maxSimplRounds %v\ntriggers: %v}", PrintMons(v.mons), v.totalMsgs, v.totalPayload, v.totalRedirects, v.maxdelay, v.maxSimplRounds, v.triggers)
+	return fmt.Sprintf("Verdict{mons = %s\ntotalMsgs: %d totalPayload: %d totalRedirects: %d, maxdelay %v, maxSimplRounds %v\ntriggers: %v}", PrintMons(v.mons), v.totalMsgs, v.totalPayload, v.totalRedirects, v.maxDelay, v.maxSimplRounds, v.triggers)
 }
 func (v Verdict) Short() string {
-	return fmt.Sprintf("Verdict{totalMsgs: %d totalPayload: %d totalRedirects: %d\nmaxdelay %v, maxSimplRounds %v\ntriggers: %v}", v.totalMsgs, v.totalPayload, v.totalRedirects, v.maxdelay, v.maxSimplRounds, v.triggers)
+	sMaxDelay := ""
+	if v.maxDelay != nil {
+		sMaxDelay = fmt.Sprintf("%v", v.maxDelay)
+	}
+	sMaxSimplRounds := ""
+	if v.maxSimplRounds != nil {
+		sMaxSimplRounds = fmt.Sprintf("%v", v.maxSimplRounds)
+	}
+	return fmt.Sprintf("Verdict{totalMsgs: %d totalPayload: %d totalRedirects: %d\nmaxdelay %s, maxSimplRounds %s\ntriggers: %v}", v.totalMsgs, v.totalPayload, v.totalRedirects, sMaxDelay, sMaxSimplRounds, v.triggers)
 }
 
 func ConvergeCountTrigger(mons map[Id]*Monitor) Verdict {
@@ -236,7 +246,7 @@ func ConvergeCountTrigger(mons map[Id]*Monitor) Verdict {
 		}
 		triggers = append(triggers, m.trigger...)
 	}
-	return Verdict{mons, totalMsgs, totalPayload, totalRedirects, *maxdelay, *maxSimplRounds, triggers}
+	return Verdict{mons, totalMsgs, totalPayload, totalRedirects, maxdelay, maxSimplRounds, triggers}
 }
 
 func Converge(mons map[Id]*Monitor) {
@@ -253,7 +263,6 @@ func Converge(mons map[Id]*Monitor) {
 	//close(cTicks) //so go routines can shutdown properly
 	//fmt.Printf("Finished\n")
 	return
-
 }
 
 func ShouldContinue(mons map[Id]*Monitor) (bool, bool) {
@@ -365,7 +374,7 @@ func (m *Monitor) processQ() {
 		} else {
 			switch msg.Kind {
 			case Res:
-				m.r[msg.Stream] = msgToResp(msg, m.ttlMap)
+				m.r[msg.Stream] = msgToResp(msg, m.ttlMap, &m.expr)
 			case Req:
 				m.pen = append(m.pen, msg)
 			case Trigger:
@@ -376,8 +385,12 @@ func (m *Monitor) processQ() {
 	m.q = []Msg{}
 }
 
-func msgToResp(msg Msg, ttlMap map[StreamName]Time) Resp {
-	return Resp{*msg.Value, false, *msg.ResTime, *msg.SimplRounds, ttlMap[msg.Stream.GetName()]} //received responses are marked as LAZY, so as not to send them again and flood the net!!
+func msgToResp(msg Msg, ttlMap map[StreamName]Time, spec *Spec) Resp { //TODO: revise using ttl value as is, decrement by initialization time?
+	ttl := 0
+	if spec.isEval(msg.Stream.GetName()) { //if is Eval the monitor will keep it, otw is lazy and the Unresolved eq is in U and the value need not be kept
+		ttl = ttlMap[msg.Stream.GetName()]
+	}
+	return Resp{*msg.Value, false, *msg.ResTime, *msg.SimplRounds, ttl} //received responses are marked as LAZY, so as not to send them again and flood the net!!
 }
 
 func (m *Monitor) readInput() {
@@ -400,7 +413,7 @@ func (m *Monitor) generateEquations() {
 				e := o.Expr
 				i := e.InstantiateExpr(m.t, m.tracelen)
 				//fmt.Printf("Instanced expr: %s\n", i.Sprint())
-				u := Und{SimplifyExpr(i), o.Eval, 0} //Und gets generated with the eval specified
+				u := Und{SimplifyExpr(i), o.Eval, 0, true} //Und gets generated with the eval specified and be able to simplify
 				stream := InstStreamFetchExpr{o.Name, m.t}
 				m.u[stream] = u
 			}
@@ -422,19 +435,22 @@ func (m *Monitor) simplify() {
 				if ok { //we found the value of the dependency stream in R
 					//fmt.Printf("[%d]and we have its value\n %s\n", m.nid, und.exp.Sprint())
 					und.exp = und.exp.Substitute(depStream, resp.value)
+					und.simplifiable = true //set it to true so the expression will be simplified (if possible)
 					//fmt.Printf("[%d]after subs %s\n", m.nid, und.exp.Sprint())
 				}
 			}
-			und.exp = SimplifyExpr(und.exp)
-			und.simplRounds++
-			m.u[stream] = Und{und.exp, und.eval, und.simplRounds} //store the substituted and simplified expression
-			newresp, isResolved := toResp(stream, m.t, und, m.ttlMap)
-			if isResolved {
-				//fmt.Printf("[%d]New Resp: %v",m.nid, newresp)
-				m.r[stream] = newresp //add it to R
-				delete(m.u, stream)   //remove it from U
+			if und.simplifiable {
+				und.exp = SimplifyExpr(und.exp)
+				und.simplRounds++
+				m.u[stream] = Und{und.exp, und.eval, und.simplRounds, false} //store the substituted and simplified expression
+				newresp, isResolved := toResp(stream, m.t, und, m.ttlMap)
+				if isResolved {
+					//fmt.Printf("[%d]New Resp: %v",m.nid, newresp)
+					m.r[stream] = newresp //add it to R
+					delete(m.u, stream)   //remove it from U
+				}
+				someSimpl = someSimpl || isResolved
 			}
-			someSimpl = someSimpl || isResolved
 		}
 	}
 }
@@ -442,7 +458,7 @@ func (m *Monitor) simplify() {
 func toResp(stream InstStreamExpr, t int, und Und, ttlMap map[StreamName]Time) (Resp, bool) {
 	//fmt.Printf("To Resp: %v\n", und.exp)
 	var r Resp
-	ttl := ttlMap[stream.GetName()]
+	ttl := int(math.Max(0, float64(ttlMap[stream.GetName()]-(t-stream.GetTick())))) //time remaining to remove from R: ttl - max(0, now-instantiation)
 	switch und.exp.(type) {
 	case InstTruePredicate:
 		return Resp{und.exp, und.eval, t, und.simplRounds, ttl}, true

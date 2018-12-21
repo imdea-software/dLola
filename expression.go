@@ -422,6 +422,7 @@ func NewDefaultExpr(co interface{}) DefaultExpr {
 	if co != nil {
 		switch co.(type) {
 		case TruePredicate:
+			t = BoolT
 		case FalsePredicate:
 			t = BoolT
 		case NumExpr:

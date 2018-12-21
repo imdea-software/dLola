@@ -53,6 +53,31 @@ type OutputDecl struct { // output int foo /* this is just a decl, later a tick 
 	Pos  Position
 }
 
+type MonitorDecl struct {
+	Nid   int
+	Decls []interface{}
+}
+
+func NewMonitorDecl(n, d interface{}) MonitorDecl {
+	return MonitorDecl{n.(IntLiteralExpr).Num, ToSlice(d)}
+}
+
+type TopoMonitorDecls struct {
+	Topo         string
+	Nmons        int
+	MonitorDecls []MonitorDecl
+}
+
+func NewTopoMonitorDecls(t, m interface{}) TopoMonitorDecls {
+	monitorDecls := make([]MonitorDecl, 0)
+	nmons := 0
+	for _, m := range ToSlice(m) {
+		monitorDecls = append(monitorDecls, m.(MonitorDecl))
+		nmons++
+	}
+	return TopoMonitorDecls{t.(Identifier).Val, nmons, monitorDecls}
+}
+
 /*lm: not needed type TicksDecl struct {
 	Name  StreamName
 	Ticks TickingExpr

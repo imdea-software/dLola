@@ -7,7 +7,19 @@ import(
 
 }
 
-Input  <- _? d:(Declaration*)  EOF {
+Input <- _? t:Topo m:(MonitorDeclaration*) EOF {
+      return NewTopoMonitorDecls(t,m), nil
+}
+
+Topo <- CLIQUE {return Identifier{string(c.text)}, nil}
+     	/ LINE {return Identifier{string(c.text)}, nil}
+	/ RING {return Identifier{string(c.text)}, nil}
+	/ RINGSHORT {return Identifier{string(c.text)}, nil}
+	/ STAR {return Identifier{string(c.text)}, nil} 
+
+MonitorDeclaration <- _? AT n:NumLiteral "{" d:Decls "}" _? {return NewMonitorDecl(n,d),nil}
+
+Decls  <- _? d:(Declaration*) {
        // returns a []interface{} where all elements are
        //    Const, Input, Output, Ticks or Definitions
        return d,nil
@@ -265,14 +277,14 @@ Alphanum <- ([a-zA-Z0-9]+)  { return Alphanum{string(c.text)},nil }
 
 Tag  "tag"      <- ( '#'[a-zA-Z](['_''-''.'a-zA-Z0-9])* )    { return Tag{string(c.text)},nil }
 
-_ "whitespace" <- [ \t\n\r]+
-  	       	  / Comment+
+_ "whitespace" <- [ \t\n\r]+ _?
+  	       	  / Comment+ _?
 
 //EOL     <- _? Comment? ("\r\n" / "\n\r" / "\r" / "\n" / EOF)
 EOL     <- ("\r\n" / "\n\r" / "\r" / "\n")
 
-Comment <- // "//" [^\r\n]* [\r\n] {return "",nil }
-	  "/*" [^*/]* "*/"  { return "", nil}
+Comment <- "/*" [^*/]* "*/"  { return "", nil}
+	   / "//" [ a-zA-Z0-9'#''_''-''@'',']* [\n\r] {return "",nil }
 
 
 //IMPORTANT: these operations are meant to be used exclusively in !X expressions so the rule is only matched if not followed by X(see AtomicBool).
@@ -317,9 +329,8 @@ IF   <- "if" _
 THEN <- "then" _
 ELSE <- "else" _
 ASSIGN <- "=" _?
-
-TRUE <- "true" _ / "true" EOF
-FALSE <- "false" _ / "false" EOF
+TRUE <- "true" _?
+FALSE <- "false" _?
 AND <- "and" _? //"/\\" _?
 OR <- "or" _? //"\\/" _?
 NOT <- "not" _? //"~" _?
@@ -343,8 +354,12 @@ EVAL <- "eval" _?
 
 STRCONCAT <- "sConcat" _?
 
-
-
+AT <- "@"
+CLIQUE <- "clique"
+LINE <- "line"
+RING <- "ring"
+RINGSHORT <- "ringshort"
+STAR <- "star"
 
 /*Function <- n:Name '(' a:Args ')' { //TODO: return proper data
 	    return n, nil
