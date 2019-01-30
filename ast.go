@@ -45,6 +45,7 @@ type ConstDecl struct { // const int one_sec := 1s
 type InputDecl struct { // input int bar
 	Name StreamName
 	Type StreamType
+	Eval bool
 	Pos  Position
 }
 type OutputDecl struct { // output int foo /* this is just a decl, later a tick and a def will be given */
@@ -100,9 +101,9 @@ func NewConstDecl(n, t, e, p interface{}) ConstDecl {
 	name := getStreamName(n)
 	return ConstDecl{name, t.(StreamType), e.(Expr), NewPosition(p)}
 }
-func NewInputDecl(n, t, p interface{}) InputDecl {
+func NewInputDecl(n, t, le, p interface{}) InputDecl {
 	name := getStreamName(n)
-	return InputDecl{name, t.(StreamType), NewPosition(p)}
+	return InputDecl{name, t.(StreamType), le.(bool), NewPosition(p)}
 }
 func NewOutputDecl(n, t, p interface{}) OutputDecl {
 	name := getStreamName(n)

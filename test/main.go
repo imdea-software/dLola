@@ -12,14 +12,13 @@ func main() {
 	filename := os.Args[1]
 	past_future := os.Args[2]
 	trigger := os.Args[3]
-	//topo := os.Args[4]
-	//nmons, _ := strconv.Atoi(os.Args[5])
 	tlen, _ := strconv.Atoi(os.Args[4])
 	spec, ok := dLola.GetCheckedSpec(filename)
 	if ok {
 		mons := dLola.BuildMonitorTopo(spec, past_future, trigger, tlen)
-		//dLola.Tickn(mons, 4)
+		//dLola.Tickn(mons, 100)
 		prefix := "[dLola_Monitor_Builder]: "
+		//fmt.Printf("%sMons: %s\n", prefix, dLola.PrintMons(mons))
 		verdict := dLola.ConvergeCountTrigger(mons)
 		fmt.Printf("%sVerdict: %s\n", prefix, verdict.Short())
 	}
@@ -42,4 +41,5 @@ func main() {
 	}
 }
 */
-//go run main.go inputMonitor.txt past trigger clique 2 20
+//topology & nmons are declared in the spec
+//go run main.go inputMonitor.txt past trigger 2

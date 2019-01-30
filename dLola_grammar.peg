@@ -36,8 +36,8 @@ Const <- CONST t:Type n:Name ASSIGN e:Expr {
       return NewConstDecl(n,t,e,c.pos),nil //c.pos is a struct defined in parser.go (once generated) containing line, col and offset
 }
 
-InputStreamDecl <- INPUT t:Type n:Name {
-    return NewInputDecl(n,t, c.pos),nil
+InputStreamDecl <- INPUT t:Type n:Name le:LazyEval? {
+    return NewInputDecl(n,t, le, c.pos),nil
 }
 
 OutputDefinition <- d:DefOut t:Type n:Name le:LazyEval? ASSIGN e:Block {

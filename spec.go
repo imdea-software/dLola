@@ -242,7 +242,7 @@ func GetCheckedSpec(filename string) (*SpecDeploy, bool) {
 	}
 	//PrintSpec(spec, prefix)
 	//fmt.Printf(prefix + "Generating Pretty Print\n")
-	//fmt.Printf(PrettyPrintSpec(spec, prefix))
+	//fmt.Printf(PrettyPrintSpec(specDeploy.Spec, prefix))
 	prefix = "[dLola_type_checker]: "
 	CheckTypesSpec(specDeploy.Spec, prefix)
 	wf := AnalyzeWF(specDeploy.Spec)

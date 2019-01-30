@@ -253,22 +253,13 @@ func GenerateChannels(delta map[StreamName]Id, spec *Spec, depGraph DepGraphAdj,
 				if inputDecl, ok := spec.Input[d.Dest]; ok {
 					//fmt.Printf("found input %s for monitor %d\n", d.Dest, id)
 					c := make(chan Resolved)
-					generateInput(d.Dest, inputDecl.Type, c, tlen, ttlMap) //call to inputReader!!! TODO
+					generateInput(d.Dest, inputDecl.Type, inputDecl.Eval, c, tlen, ttlMap) //call to inputReader!!!
 					channels = append(channels, c)
 				}
 			}
 		}
 	}
 	return channels
-}
-
-func GenerateTtlMap(depGraph DepGraphAdj, nid Id, delta map[StreamName]Id, dists map[Id]map[Id]int) map[StreamName]Time {
-	c := 3 //do an analysis in order to specify this quantity considering the longest path in the dependency graph, the width of the topology TODO:ttlMap.go
-	r := make(map[StreamName]Time)
-	for streamName, _ := range depGraph {
-		r[streamName] = c
-	}
-	return r
 }
 
 func GenerateGlobalRoutes(nmons int, topo string) map[Id]map[Id]Id {

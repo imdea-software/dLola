@@ -158,13 +158,14 @@ type Monitor struct {
 	depGraph       DepGraphAdj         //dependencies among streams
 	dep            map[StreamName][]Id //Monitors that need the value of the stream (should be coherent to delta)
 	trigger        []Resolved
-	ttlMap         map[StreamName]Time //ttl of each resolved stream (in R), will be decremented in each tick, when 0 it will be removed AT START >=1
+	ttlMap         map[StreamName]Time                 //ttl of each resolved stream (in R), will be decremented in each tick, when 0 it will be removed AT START >=1
+	instStreamDep  map[InstStreamExpr][]InstStreamExpr //list of all the other InstStreamExprs that an instanced stream need to be computed(without simplifying)
 }
 
 func (n Monitor) String() string {
 	s := fmt.Sprintf("\n###############\n Node { nid = %d\n q = %s\n i = %v\n u = %v\n r = %s\n expr = %v\n pen = %v\n out = %v\n req = %v\n t = %d\n routes = %v\n delta = %v\n tracelen = %v\n"+
-		" numMsgs = %d\n sumPayload = %d\n redirectedMsgs = %d\n dep = %v\n trigger = %v\n ttlMap = %v\n} ################\n",
-		n.nid, n.q, n.i, printU(n.u), printR(n.r), PrettyPrintSpec(&(n.expr), ""), n.pen, n.out, n.req, n.t, n.routes, n.delta, n.tracelen, n.numMsgs, n.sumPayload, n.redirectedMsgs, n.dep, n.trigger, n.ttlMap)
+		" numMsgs = %d\n sumPayload = %d\n redirectedMsgs = %d\n dep = %v\n trigger = %v\n ttlMap = %v\n instStreamDep = %v\n} ################\n",
+		n.nid, n.q, n.i, printU(n.u), printR(n.r), PrettyPrintSpec(&(n.expr), ""), n.pen, n.out, n.req, n.t, n.routes, n.delta, n.tracelen, n.numMsgs, n.sumPayload, n.redirectedMsgs, n.dep, n.trigger, n.ttlMap, n.instStreamDep)
 	return s
 }
 func (m Monitor) triggered() bool {
@@ -176,7 +177,7 @@ func (m Monitor) finished() bool {
 func printU(u USet) string {
 	s := "map:["
 	for istream, und := range u {
-		s += fmt.Sprintf("%s : {%s, %t, %d}; ", istream.Sprint(), und.exp.Sprint(), und.eval, und.simplRounds, und.simplifiable)
+		s += fmt.Sprintf("%s : {%s, %t, %d, %t}; ", istream.Sprint(), und.exp.Sprint(), und.eval, und.simplRounds, und.simplifiable)
 	}
 	s += "]"
 	return s
@@ -199,7 +200,7 @@ func PrintMons(ms map[Id]*Monitor) string {
 }
 
 func NewMonitor(id, tracelen int, s Spec, received Received, routes map[Id]Id, delta map[StreamName]Id, depGraph DepGraphAdj, dep map[StreamName][]Id, inputChannels []chan Resolved, ttlMap map[StreamName]Time) Monitor {
-	return Monitor{id, received, inputChannels, make(USet), make(RSet), s, Pending{}, Output{}, Requested{}, 0, routes, delta, tracelen, 0, 0, 0, depGraph, dep, make([]Resolved, 0), ttlMap}
+	return Monitor{id, received, inputChannels, make(USet), make(RSet), s, Pending{}, Output{}, Requested{}, 0, routes, delta, tracelen, 0, 0, 0, depGraph, dep, make([]Resolved, 0), ttlMap, make(map[InstStreamExpr][]InstStreamExpr)}
 }
 
 type Verdict struct {
@@ -229,24 +230,29 @@ func ConvergeCountTrigger(mons map[Id]*Monitor) Verdict {
 	totalMsgs := 0
 	totalPayload := 0
 	totalRedirects := 0
-	var maxdelay *Resolved
-	var maxSimplRounds *Resolved
+	/*var maxdelay *Resolved
+	var maxSimplRounds *Resolved*/
+	maxdelay := Resolved{InstStreamFetchExpr{"s", -1}, Resp{InstIntLiteralExpr{0}, false, 0, 0, 0}}
+	maxSimplRounds := Resolved{InstStreamFetchExpr{"s", -1}, Resp{InstIntLiteralExpr{0}, false, 0, 0, 0}}
 	triggers := make([]Resolved, 0)
 	for _, m := range mons {
 		totalMsgs += m.numMsgs
 		totalPayload += m.sumPayload
 		totalRedirects += m.redirectedMsgs
+		//r := Resolved{InstStreamFetchExpr{"s", -1}, Resp{InstIntLiteralExpr{0}, false, 0, 0, 0}}
 		for stream, resp := range m.r {
-			if maxdelay == nil || maxdelay.resp.resTime < resp.resTime {
-				maxdelay = &Resolved{stream, resp}
+			if /* maxdelay == nil || */ maxdelay.resp.resTime < resp.resTime {
+				maxdelay.stream = stream
+				maxdelay.resp = resp
 			}
-			if maxSimplRounds == nil || maxSimplRounds.resp.simplRounds < resp.simplRounds {
-				maxSimplRounds = &Resolved{stream, resp}
+			if /* maxSimplRounds == nil ||*/ maxSimplRounds.resp.simplRounds < resp.simplRounds {
+				maxSimplRounds.stream = stream
+				maxSimplRounds.resp = resp
 			}
 		}
 		triggers = append(triggers, m.trigger...)
 	}
-	return Verdict{mons, totalMsgs, totalPayload, totalRedirects, maxdelay, maxSimplRounds, triggers}
+	return Verdict{mons, totalMsgs, totalPayload, totalRedirects, &maxdelay, &maxSimplRounds, triggers}
 }
 
 func Converge(mons map[Id]*Monitor) {
@@ -348,11 +354,11 @@ func classifyOut(m *Monitor, incomingQs map[Id][]Msg) {
 	m.out = []Msg{}
 }*/
 
-func (m *Monitor) sendMsg(msg Msg) {
+func (m *Monitor) sendMsg(msg *Msg) {
 	//fmt.Printf("Sending msg: %s\n", msg.String())
-	m.out = append(m.out, msg)
+	m.out = append(m.out, *msg)
 	m.numMsgs++
-	m.sumPayload += payload(msg)
+	m.sumPayload += payload(*msg)
 }
 
 func (m *Monitor) process() {
@@ -370,11 +376,11 @@ func (m *Monitor) processQ() {
 	//fmt.Printf("[%d]:PROCESSQ: %s\n", m.nid, m.String())
 	for _, msg := range m.q {
 		if msg.Dst != m.nid { //redirect msgs whose dst is not this node
-			m.sendMsg(msg)
+			m.sendMsg(&msg)
 		} else {
 			switch msg.Kind {
 			case Res:
-				m.r[msg.Stream] = msgToResp(msg, m.ttlMap, &m.expr)
+				m.r[msg.Stream] = msgToResp(&msg, m.ttlMap, &m.expr)
 			case Req:
 				m.pen = append(m.pen, msg)
 			case Trigger:
@@ -385,9 +391,9 @@ func (m *Monitor) processQ() {
 	m.q = []Msg{}
 }
 
-func msgToResp(msg Msg, ttlMap map[StreamName]Time, spec *Spec) Resp { //TODO: revise using ttl value as is, decrement by initialization time?
+func msgToResp(msg *Msg, ttlMap map[StreamName]Time, spec *Spec) Resp { //TODO: revise using ttl value as is, decrement by initialization time?
 	ttl := 0
-	if spec.isEval(msg.Stream.GetName()) { //if is Eval the monitor will keep it, otw is lazy and the Unresolved eq is in U and the value need not be kept
+	if spec.isEval(msg.Stream.GetName()) { //if it is Eval the monitor will keep it, otw is lazy and the Unresolved eq is in U and the value need not be kept
 		ttl = ttlMap[msg.Stream.GetName()]
 	}
 	return Resp{*msg.Value, false, *msg.ResTime, *msg.SimplRounds, ttl} //received responses are marked as LAZY, so as not to send them again and flood the net!!
@@ -442,7 +448,8 @@ func (m *Monitor) simplify() {
 			if und.simplifiable {
 				und.exp = SimplifyExpr(und.exp)
 				und.simplRounds++
-				m.u[stream] = Und{und.exp, und.eval, und.simplRounds, false} //store the substituted and simplified expression
+				und.simplifiable = false
+				m.u[stream] = und //store the substituted and simplified expression
 				newresp, isResolved := toResp(stream, m.t, und, m.ttlMap)
 				if isResolved {
 					//fmt.Printf("[%d]New Resp: %v",m.nid, newresp)
@@ -485,10 +492,11 @@ func (m *Monitor) addRes() {
 					if d != m.nid {
 						msg := createMsg(stream, &resp, m.nid, d)
 						//fmt.Printf("Creating Res msg of eval stream %s\n", msg.String())
-						m.sendMsg(msg)
+						m.sendMsg(&msg)
 					}
 				}
-				m.r[stream] = Resp{resp.value, false, resp.resTime, resp.simplRounds, m.ttlMap[stream.GetName()]} //we mark the resp as already sent to interested monitors
+				resp.eval = false
+				m.r[stream] = resp //we mark the resp as already sent to interested monitors, TODO: search for a way to do resp.eval = false and make it persistent, so we avoid this unnecessary alloc
 			}
 		}
 	}
@@ -498,7 +506,7 @@ func (m *Monitor) addRes() {
 			newMsg := createMsg(penMsg.Stream, &resp, m.nid, penMsg.Src)
 			//fmt.Printf("Resolved LAZY %s\n", newMsg.String())
 			if newMsg.Dst != m.nid { //newMsg will be sent only if destiny is another monitor
-				m.sendMsg(newMsg)
+				m.sendMsg(&newMsg)
 			}
 			if penMsg.Kind == Trigger {
 				//fmt.Printf("Resolved Trigger %s\n", msg.Stream.Sprint())
@@ -518,25 +526,35 @@ func createMsg(stream InstStreamExpr, resp *Resp, id, dst Id) Msg {
 	}
 	return Msg{Res, stream, &resp.value, &resp.resTime, &resp.simplRounds, id, dst}
 }
-func (m *Monitor) addReq() {
+func (m *Monitor) addReq() { //TODO: think of extracting part to the offline
 	//fmt.Printf("[%d]:ADDREQ: %s\n", m.nid, m.String())
 	for _, p := range m.pen {
-		createReqMsgsPen(p.Stream, m)
+		if !m.expr.Output[p.Stream.GetName()].Eval { //we only need to analyze dependencies to create Reqs for LAZY streams!!
+			createReqMsgsPen(p.Stream, m)
+		}
 	}
 }
 
 func createReqMsgsPen(stream InstStreamExpr, m *Monitor) {
-	//fmt.Printf("Creating REQS\n")
-	dependencies := obtainDependencies(stream, m)
-	for i := 0; i < len(dependencies); i++ {
-		depStream := dependencies[i]
-		//fmt.Printf("Adjacency %s\n", adj.Sprint())
-		createReqStream(depStream, m)
-		_, resolved := m.r[depStream]
-		if !resolved {
-			dependencies = addNextLevelDependencies(dependencies, obtainDependencies(depStream, m), m.r)
+	dependencies, found := m.instStreamDep[stream]
+	if found {
+		for _, d := range dependencies {
+			createReqStream(d, m)
 		}
-		//fmt.Printf("next level dependencies after: %s\n", SprintStreams(dependencies))
+	} else {
+		//fmt.Printf("Creating REQS\n")
+		dependencies := obtainDependencies(stream, m)
+		for i := 0; i < len(dependencies); i++ {
+			depStream := dependencies[i]
+			//fmt.Printf("Adjacency %s\n", adj.Sprint())
+			_, resolved := m.r[depStream]
+			if !resolved { //if not resolved we need to Request it and continue analyzing sub-dependencies
+				createReqStream(depStream, m)
+				dependencies = addNextLevelDependencies(dependencies, obtainDependencies(depStream, m), m.r)
+			}
+			//fmt.Printf("next level dependencies after: %s\n", SprintStreams(dependencies))
+		}
+		m.instStreamDep[stream] = dependencies //save the dependencies of the stream
 	}
 }
 
@@ -546,7 +564,7 @@ func obtainDependencies(stream InstStreamExpr, m *Monitor) []InstStreamExpr {
 	uExpr, unresolved := m.u[stream]
 	if unresolved { //get actual needed dependencies taking into account what was simplified
 		dependencies = getUdependencies(stream, adjacencies, uExpr.exp)
-	} else { //get the dependencies from the spec and analyze next level dependencies
+	} else { //get the dependencies from the spec and analyze next level dependencies; case of not instantiated yet!
 		dependencies = convertToStreams(stream, adjacencies, m.tracelen)
 	} //othw should be resolved and the msg should have been responded in the addRes phase
 	return dependencies
@@ -560,7 +578,7 @@ func createReqStream(depStream InstStreamExpr, m *Monitor) {
 	if !resolved && m.delta[depStream.GetName()] != m.nid && !m.expr.Output[depStream.GetName()].Eval && !requested && depStream.GetTick() <= m.t { //not in R, not assigned to this monitor, not eval and not already requested, allow request of streams that have not yet been instanced?
 		//fmt.Printf("Creatting Request: %s\n", depStream.Sprint())
 		msg := createMsg(depStream, nil, m.nid, m.delta[depStream.GetName()])
-		m.sendMsg(msg)
+		m.sendMsg(&msg)
 		m.req[depStream] = struct{}{} //mark it as requested
 	}
 }
@@ -595,7 +613,8 @@ func (m *Monitor) pruneR() {
 		if resp.ttl == 0 {
 			delete(m.r, stream)
 		} else {
-			m.r[stream] = Resp{resp.value, resp.eval, resp.resTime, resp.simplRounds, resp.ttl - 1}
+			resp.ttl--
+			m.r[stream] = resp
 		}
 	}
 }

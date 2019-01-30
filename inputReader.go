@@ -8,13 +8,13 @@ import (
 	"strconv"
 )
 
-func generateInput(s StreamName, t StreamType, c chan Resolved, tlen int, ttlMap map[StreamName]Time) {
+func generateInput(s StreamName, t StreamType, eval bool, c chan Resolved, tlen int, ttlMap map[StreamName]Time) {
 	//go readEventFile(s,t,c, onComma, makeResolved)
-	go produceEvent(s, t, c, tlen, ttlMap)
+	go produceEvent(s, t, eval, c, tlen, ttlMap)
 }
 
 /*Produce event instead of reading it*/
-func produceEvent(s StreamName, t StreamType, c chan Resolved, tlen int, ttlMap map[StreamName]Time) {
+func produceEvent(s StreamName, t StreamType, eval bool, c chan Resolved, tlen int, ttlMap map[StreamName]Time) {
 	var v InstExpr
 	for i := 0; i < tlen; i++ {
 		inststream := InstStreamFetchExpr{s, i}
@@ -33,7 +33,8 @@ func produceEvent(s StreamName, t StreamType, c chan Resolved, tlen int, ttlMap 
 		default:
 
 		}
-		c <- Resolved{inststream, Resp{v, false, 0, 0, ttlMap[s]}}
+		//fmt.Printf("Producing event %v\n", Resolved{inststream, Resp{v, eval, i, 0, ttlMap[s]}})
+		c <- Resolved{inststream, Resp{v, eval, i, 0, ttlMap[s]}}
 	}
 }
 
