@@ -17,7 +17,7 @@ func main() {
 	if ok {
 		mons := dLola.BuildMonitorTopo(spec, past_future, trigger, tlen)
 		//dLola.Tickn(mons, 100)
-		prefix := "[dLola_Monitor_Builder]: "
+		prefix := "[dLola_Monitor_Runtime]: "
 		//fmt.Printf("%sMons: %s\n", prefix, dLola.PrintMons(mons))
 		verdict := dLola.ConvergeCountTrigger(mons)
 		fmt.Printf("%sVerdict: %s\n", prefix, verdict.Short())

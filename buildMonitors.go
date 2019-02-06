@@ -1,7 +1,7 @@
 package dLola
 
 import (
-	//"fmt"
+	"fmt"
 	"math"
 )
 
@@ -246,7 +246,7 @@ func RootStream(s StreamName, depGraph DepGraphAdj) bool {
 
 func GenerateChannels(delta map[StreamName]Id, spec *Spec, depGraph DepGraphAdj, id Id, tlen int, ttlMap map[StreamName]Time) []chan Resolved {
 	channels := make([]chan Resolved, 0)
-	for stream, dependencies := range depGraph {
+	/*for stream, dependencies := range depGraph {
 		if delta[stream] == id {
 			for _, d := range dependencies {
 				//fmt.Printf("%v\n", spec.Input)
@@ -257,6 +257,13 @@ func GenerateChannels(delta map[StreamName]Id, spec *Spec, depGraph DepGraphAdj,
 					channels = append(channels, c)
 				}
 			}
+		}
+	}*/
+	for stream, inputDecl := range spec.Input {
+		if delta[stream] == id { //input deployed in this monitor
+			c := make(chan Resolved)
+			generateInput(stream, inputDecl.Type, inputDecl.Eval, c, tlen, ttlMap) //call to inputReader!!!
+			channels = append(channels, c)
 		}
 	}
 	return channels
@@ -322,6 +329,7 @@ func BuildMonitors(tlen int, specDeploy *SpecDeploy, reqs map[Id][]Msg) map[Id]*
 	mons := make(map[Id]*Monitor)
 	nmons := specDeploy.Nmons
 	delta := specDeploy.Delta
+	fmt.Printf("specDeploy delta: %v\n", delta)
 	dists := ObtainDists(specDeploy.GlobalRoutes)
 	depGraph := SpecToGraph(specDeploy.Spec)
 	dependencies := InterestedMonitors(delta, depGraph)

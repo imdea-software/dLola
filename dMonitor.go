@@ -204,25 +204,25 @@ func NewMonitor(id, tracelen int, s Spec, received Received, routes map[Id]Id, d
 }
 
 type Verdict struct {
-	mons                                    map[Id]*Monitor
-	totalMsgs, totalPayload, totalRedirects int
-	maxDelay, maxSimplRounds                *Resolved
-	triggers                                []Resolved
+	mons                                                              map[Id]*Monitor
+	totalMsgs, totalPayload, totalRedirects, maxDelay, maxSimplRounds int
+	maxDelayStream, maxSimplRoundsStream                              *Resolved
+	triggers                                                          []Resolved
 }
 
 func (v Verdict) String() string {
-	return fmt.Sprintf("Verdict{mons = %s\ntotalMsgs: %d totalPayload: %d totalRedirects: %d, maxdelay %v, maxSimplRounds %v\ntriggers: %v}", PrintMons(v.mons), v.totalMsgs, v.totalPayload, v.totalRedirects, v.maxDelay, v.maxSimplRounds, v.triggers)
-}
-func (v Verdict) Short() string {
 	sMaxDelay := ""
-	if v.maxDelay != nil {
-		sMaxDelay = fmt.Sprintf("%v", v.maxDelay)
+	if v.maxDelayStream != nil {
+		sMaxDelay = fmt.Sprintf("%v", v.maxDelayStream)
 	}
 	sMaxSimplRounds := ""
-	if v.maxSimplRounds != nil {
-		sMaxSimplRounds = fmt.Sprintf("%v", v.maxSimplRounds)
+	if v.maxSimplRoundsStream != nil {
+		sMaxSimplRounds = fmt.Sprintf("%v", v.maxSimplRoundsStream)
 	}
-	return fmt.Sprintf("Verdict{totalMsgs: %d totalPayload: %d totalRedirects: %d\nmaxdelay %s, maxSimplRounds %s\ntriggers: %v}", v.totalMsgs, v.totalPayload, v.totalRedirects, sMaxDelay, sMaxSimplRounds, v.triggers)
+	return fmt.Sprintf("Verdict{mons = %s\ntotalMsgs: %d totalPayload: %d totalRedirects: %d, maxdelay %d, maxSimplRounds %d\ntriggers: %v, maxDelayStream %s\n, maxSimplRoundsStream: %s}", PrintMons(v.mons), v.totalMsgs, v.totalPayload, v.totalRedirects, v.maxDelay, v.maxSimplRounds, v.triggers, sMaxDelay, sMaxSimplRounds)
+}
+func (v Verdict) Short() string {
+	return fmt.Sprintf("Verdict{totalMsgs: %d totalPayload: %d totalRedirects: %d maxDelay: %d, maxSimplRounds: %d\ntriggers: %v}", v.totalMsgs, v.totalPayload, v.totalRedirects, v.maxDelay, v.maxSimplRounds, v.triggers)
 }
 
 func ConvergeCountTrigger(mons map[Id]*Monitor) Verdict {
@@ -252,7 +252,7 @@ func ConvergeCountTrigger(mons map[Id]*Monitor) Verdict {
 		}
 		triggers = append(triggers, m.trigger...)
 	}
-	return Verdict{mons, totalMsgs, totalPayload, totalRedirects, &maxdelay, &maxSimplRounds, triggers}
+	return Verdict{mons, totalMsgs, totalPayload, totalRedirects, maxdelay.resp.resTime, maxSimplRounds.resp.simplRounds, &maxdelay, &maxSimplRounds, triggers}
 }
 
 func Converge(mons map[Id]*Monitor) {
@@ -377,6 +377,7 @@ func (m *Monitor) processQ() {
 	for _, msg := range m.q {
 		if msg.Dst != m.nid { //redirect msgs whose dst is not this node
 			m.sendMsg(&msg)
+			m.redirectedMsgs++
 		} else {
 			switch msg.Kind {
 			case Res:
