@@ -77,11 +77,11 @@ BooleanExpr <- a:Ands    b:(OrExpr*) {
 		     //fmt.Printf("boolean NO error: %s", v.Sprint())
 	       	     return BoolExprToExpr(v),nil //old: a,nil lm:BoolExprToExpr(a), nil
 		  } else {
-		  fmt.Printf("boolean error")
+		  //fmt.Printf("boolean error")
 		    return nil, errors.New("BoolExpr: Ands expression is not boolean")
 		  }
 	       }
-	       fmt.Printf("boolean expr with ors")
+	       //fmt.Printf("boolean expr with ors")
 	       return BoolExprToExpr(NewOrPredicate(a,b)),nil
 	    }
 

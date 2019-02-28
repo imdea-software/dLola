@@ -1,7 +1,7 @@
 package dLola
 
 import (
-	"fmt"
+	//"fmt"
 	"math"
 )
 
@@ -216,7 +216,7 @@ func GenerateReqs(spec *Spec, past_future, trigger string, tlen int, delta map[S
 		if RootStream(o.Name, depGraph) {
 			stream := InstStreamFetchExpr{o.Name, tick_req}
 			dst := delta[o.Name]
-			m := Msg{kind, stream, nil, nil, nil, dst, dst} //src of the msgs will be themselves so they do not emit a response msg
+			m := Msg{kind, stream, nil, nil, nil, dst, dst} //src of the msgs will be themselves so they do not emit a response msg(should be changed to the monitor to whom to transmit the verdict)
 			reqsi, ok := reqs[dst]
 			if ok {
 				//fmt.Printf("There were prev reqs\n")
@@ -329,7 +329,7 @@ func BuildMonitors(tlen int, specDeploy *SpecDeploy, reqs map[Id][]Msg) map[Id]*
 	mons := make(map[Id]*Monitor)
 	nmons := specDeploy.Nmons
 	delta := specDeploy.Delta
-	fmt.Printf("specDeploy delta: %v\n", delta)
+	//fmt.Printf("specDeploy delta: %v\n", delta)
 	dists := ObtainDists(specDeploy.GlobalRoutes)
 	depGraph := SpecToGraph(specDeploy.Spec)
 	dependencies := InterestedMonitors(delta, depGraph)

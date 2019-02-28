@@ -40,28 +40,27 @@ type Msg struct {
 	Value       *InstExpr //instead of LolaType
 	ResTime     *Time
 	SimplRounds *SimplRounds
-	Src         Id
-	Dst         Id
+	//Resp *Resp
+	Src Id
+	Dst Id
 }
 
 func (msg Msg) String() string {
-	val := "nil"
+	value := ""
 	if msg.Value != nil {
-		v := *(msg.Value)
-		val = v.Sprint()
+		val := *msg.Value
+		value = val.Sprint()
 	}
-	time := "nil"
+	resTime := ""
 	if msg.ResTime != nil {
-		t := *(msg.ResTime)
-		time = fmt.Sprintf("%d", t)
+		resTime = fmt.Sprintf("%d", msg.ResTime)
 	}
-	simp := "nil"
+	simpl := ""
 	if msg.SimplRounds != nil {
-		s := *(msg.SimplRounds)
-		simp = fmt.Sprintf("%d", s)
+		simpl = fmt.Sprintf("%d", msg.SimplRounds)
 	}
-	return fmt.Sprintf("Msg{ kind = %s\nstream = %s\nvalue = %s\nresTime = %s\nsimplRounds = %s\nsrc = %d\ndst = %d\n}", msg.Kind.String(), msg.Stream.Sprint(), val, time, simp, msg.Src, msg.Dst)
-	//return fmt.Sprintf("%v", msg)
+	return fmt.Sprintf("Msg{ kind = %s\nstream = %s\nvalue = %s\nresTime = %s\nsimplRounds = %s\nsrc = %d\ndst = %d\n}", msg.Kind.String(), msg.Stream.Sprint(), value, resTime, simpl, msg.Src, msg.Dst)
+	//return fmt.Sprintf("Msg{ kind = %s\nstream = %s\nresp = %s\nsrc = %d\ndst = %d\n}", msg.Kind.String(), msg.Stream.Sprint(), resp, msg.Src, msg.Dst)
 }
 
 func Equal(msg Msg, msg2 Msg) bool {
@@ -115,6 +114,11 @@ type Resp struct {
 	simplRounds SimplRounds
 	ttl         Time
 } //result, Eval|Lazy, time at which the result was obtained, #of calls to simplExp
+
+func (r *Resp) Sprint() string {
+	return fmt.Sprintf("Resp{value = %s\neval = %t\nresTime = %d\nsimplRounds = %d\nttl = %d\n}", r.value.Sprint(), r.eval, r.resTime, r.simplRounds, r.ttl)
+}
+
 type Resolved struct {
 	stream InstStreamExpr
 	resp   Resp
@@ -397,6 +401,9 @@ func msgToResp(msg *Msg, ttlMap map[StreamName]Time, spec *Spec) Resp { //TODO: 
 	if spec.isEval(msg.Stream.GetName()) { //if it is Eval the monitor will keep it, otw is lazy and the Unresolved eq is in U and the value need not be kept
 		ttl = ttlMap[msg.Stream.GetName()]
 	}
+	/*r := *msg.Resp
+	r.eval = false //received responses are marked as LAZY, so as not to send them again and flood the net!!
+	r.ttl = ttl*/
 	return Resp{*msg.Value, false, *msg.ResTime, *msg.SimplRounds, ttl} //received responses are marked as LAZY, so as not to send them again and flood the net!!
 }
 
@@ -491,7 +498,7 @@ func (m *Monitor) addRes() {
 			if destinies, ok := m.dep[stream.GetName()]; ok {
 				for _, d := range destinies {
 					if d != m.nid {
-						msg := createMsg(stream, &resp, m.nid, d)
+						msg := createMsg(stream, &resp, m.nid, d) //i think the ref is producing the incorrect values as the resp for both msgs is the last one!!!
 						//fmt.Printf("Creating Res msg of eval stream %s\n", msg.String())
 						m.sendMsg(&msg)
 					}
@@ -525,7 +532,10 @@ func createMsg(stream InstStreamExpr, resp *Resp, id, dst Id) Msg {
 	if resp == nil {
 		return Msg{Req, stream, nil, nil, nil, id, dst}
 	}
-	return Msg{Res, stream, &resp.value, &resp.resTime, &resp.simplRounds, id, dst}
+	val := resp.value
+	time := resp.resTime
+	simpl := resp.simplRounds
+	return Msg{Res, stream, &val, &time, &simpl, id, dst}
 }
 func (m *Monitor) addReq() { //TODO: think of extracting part to the offline
 	//fmt.Printf("[%d]:ADDREQ: %s\n", m.nid, m.String())

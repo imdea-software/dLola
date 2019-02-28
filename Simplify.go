@@ -249,9 +249,27 @@ func (this InstNumMulExpr) SimplifyNum() (InstNumExpr, bool) {
 	return InstNumMulExpr{l, r}, lsimpl || rsimpl
 }
 func (this InstNumDivExpr) SimplifyNum() (InstNumExpr, bool) {
+	vil, il := this.Left.(InstIntLiteralExpr)
+	vfl, fl := this.Left.(InstFloatLiteralExpr)
 	vir, ir := this.Right.(InstIntLiteralExpr)
 	vfr, fr := this.Right.(InstFloatLiteralExpr)
 	neutralR := (ir && vir.Num == 1) || (fr && vfr.Num == float32(1))
+	if il && ir { //both are int literals, operate
+		//fmt.Printf("Both ints \n")
+		return InstIntLiteralExpr{divInt(vil.Num, vir.Num)}, true
+	}
+	if il && fr { //int op float
+		//fmt.Printf("int op float \n")
+		return InstFloatLiteralExpr{divFloat(float32(vil.Num), vfr.Num)}, true
+	}
+	if fl && ir { //float op int
+		//fmt.Printf("float op int \n")
+		return InstFloatLiteralExpr{divFloat(vfl.Num, float32(vir.Num))}, true
+	}
+	if fl && fr { //float op float
+		//fmt.Printf("float op float \n")
+		return InstFloatLiteralExpr{divFloat(vfl.Num, vfr.Num)}, true
+	}
 	if neutralR { //divisor is 1
 		return this.Left.SimplifyNum()
 	}

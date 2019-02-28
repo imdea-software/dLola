@@ -10,11 +10,11 @@ DIR=$1 #root directory path for the generated specs
 python -m py_compile *.py
 chmod 770 *.pyc
 
-SPECS=(lotAcc)
+SPECS=(lotAcc lotAccReset lotAvg) #(lotAcc lotAccReset lotAvg lotUntil)
 TOPOS=(clique) #ring ringshort line star
 for SPEC in "${SPECS[@]}"; do
     for TOPO in "${TOPOS[@]}" ; do
-	for n in {5..5..5} ; do
+	for n in {2..2..2} ; do
 	    #generate code for both EVAL and LAZY strategies and both centralised and decentralised
 	    python ./generateLot.pyc $SPEC $DIR $TOPO 'lazy' 'cent' $n
 	    python ./generateLot.pyc $SPEC $DIR $TOPO 'lazy' 'decent' $n
@@ -24,5 +24,5 @@ for SPEC in "${SPECS[@]}"; do
     done #for of topos
 done #for of specs
 #local
-#./generateAllTests ./generated
+#./generateAllTests.sh ./generated
 

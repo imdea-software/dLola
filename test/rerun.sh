@@ -50,7 +50,7 @@ function processFile {
 
 
 if [ $# -ne 5 ] ; then
-   echo "[rerun]: need root directory from which to start the search for .go files to compile and execute"
+   echo "[rerun]: need root directory from which to start the search for files to compile and execute, num of processes, extension of the files, options and tracelen"
    exit 0
 fi
 
@@ -67,5 +67,6 @@ python -m py_compile processOutput.py
 chmod 770 *.pyc
 processDir $CODEDIR $PROC $OPTIONS
 
-#./rerun.sh /home/luismigueldanielsson/go/src/gitlab.software.imdea.org/luismiguel.danielsson/dLola/test/generated/ 4 spec "past req" 10
-#./rerun.sh /home/luismigueldanielsson/go/src/gitlab.software.imdea.org/luismiguel.danielsson/dLola/test/generated/ 4 spec "past trigger" 10
+#run them as requests, NOT TRIGGERS, othw it will terminate as soon as the first trigger gets resolved!!! (and the performance won't be accurate)
+#./rerun.sh /home/luismigueldanielsson/go/src/gitlab.software.imdea.org/luismiguel.danielsson/dLola/test/generated 4 spec "past req" 10
+#./rerun.sh /home/luismigueldanielsson/go/src/gitlab.software.imdea.org/luismiguel.danielsson/dLola/test/generated 4 spec "past trigger" 10
