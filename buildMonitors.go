@@ -57,14 +57,21 @@ func ringshortRoute(nmons, src int) map[Id]Id {
 		if i == src {
 			r[i] = i
 		} else {
-			if (i-src > 0 && math.Abs(float64(i-src))/float64(nmons) <= 0.5) || (i-src < 0 && math.Abs(float64(i-src))/float64(nmons) > 0.5) {
+			if shorterUpwards(src, i, nmons) {
 				r[i] = (src + 1) % nmons
 			} else {
-				r[i] = (src - 1) % nmons
+				if src == 0 {
+					r[i] = nmons - 1
+				} else {
+					r[i] = (src - 1) //% nmons
+				}
 			}
 		}
 	}
 	return r
+}
+func shorterUpwards(src, i, nmons int) bool {
+	return (i-src > 0 && math.Abs(float64(i-src))/float64(nmons) <= 0.5) || (i-src < 0 && math.Abs(float64(i-src))/float64(nmons) > 0.5)
 }
 func lineRoute(nmons, src int) map[Id]Id {
 	r := make(map[Id]Id)
@@ -165,8 +172,14 @@ func getArms(nmons int) int {
 		arms = 3
 	case 10:
 		arms = 3
-	default:
-
+	case 3:
+		arms = 2 //will behave as a line topo
+	case 6:
+		arms = 5
+	case 8:
+		arms = 7
+	default: //1,2
+		arms = 1
 	}
 	return arms
 }
@@ -269,6 +282,7 @@ func GenerateChannels(delta map[StreamName]Id, spec *Spec, depGraph DepGraphAdj,
 	return channels
 }
 
+/*returns a map origin destination nexthop*/
 func GenerateGlobalRoutes(nmons int, topo string) map[Id]map[Id]Id {
 	globalRoutes := make(map[Id]map[Id]Id) //map NodeId to (routetable: destiny to nextHop)
 	for i := 0; i < nmons; i++ {
@@ -277,39 +291,58 @@ func GenerateGlobalRoutes(nmons int, topo string) map[Id]map[Id]Id {
 	return globalRoutes
 }
 
+/*PRE: globalRoutes contains a connected graph, the path from origin to destination does not repeat any node (specially origin)
+graphs containing routes s.t. origin a, dest b, nexthop c, and origin c, dest b, nexthop a will produce non-termination, since the route from a to b through c is non-coherent [a, c, a, c, ...]
+returns a map origin map destination distance*/
 func ObtainDists(globalRoutes map[Id]map[Id]Id) map[Id]map[Id]int {
 	dists := make(map[Id]map[Id]int)
-	for id, routes := range globalRoutes {
-		getDists(id, routes, dists)
+	for origin, routes := range globalRoutes { //pairs origin map destination nexthop
+		//getDists(id, routes, dists)
+		for dest, _ := range routes {
+			if _, ok := dists[origin][dest]; !ok {
+				path, acc := walkPath(origin, dest, globalRoutes, dists)
+				putDists(path, acc, dest, dists)
+				//fmt.Printf("dists obtained %v\n", dists)
+				acc = 0 //in the case of reusing known distances this is needed, becasue it will be d*
+			}
+		}
+
 	}
 	return dists
 }
 
+/*
 func getDists(id Id, routes map[Id]Id, dists map[Id]map[Id]int) {
 	for dest, next := range routes {
 		if _, ok := dists[id][dest]; !ok {
-			path, acc := walkPath(id, next, dest, dists)
+			path, acc := walkPath(id, dest, routes, dists)
 			putDists(path, acc, dest, dists)
-			//fmt.Printf("dists obtained %v\n", dists)
+			fmt.Printf("dists obtained %v\n", dists)
 			acc = 0 //in the case of reusing known distances this is needed, becasue it will be d*
 		}
 	}
 	//fmt.Printf("out\n")
 }
-
-func walkPath(id, next, dest Id, dists map[Id]map[Id]int) ([]Id, int) {
+*/
+/*walk from id, next hop next and goal dest
+returns the list of nodes in the walk s.t. [id, next, ..., dest] and the accumulated weight of the path*/
+func walkPath(origin, dest Id, globalRoutes map[Id]map[Id]Id, dists map[Id]map[Id]int) ([]Id, int) {
 	path := make([]Id, 0) //lists of nodes in path from id to dest
-	curr := id
+	curr := origin
+	next := globalRoutes[origin][dest]
 	acc := 0
-	for curr != dest { //while the path has not arrived to dest
+	i := 0
+	for curr != dest && i < 10 { //while the path has not arrived to dest
 		path = append(path, curr) //remember the path
-		//fmt.Printf("walking path %v\n", path)
+		//fmt.Printf("walk path origin:%d curr: %d, next: %d, dest: %d, path: %v dists: %v\n", origin, curr, next, dest, path, dists)
 		if d, ok := dists[curr][dest]; ok { //reuse already known distances
 			acc += d    //*
 			curr = dest //go for another destination
 		} else {
 			acc++
-			curr = next
+			curr = next                     //advance cursor
+			next = globalRoutes[curr][dest] //update next hop in path
+			i++
 		}
 	}
 	return path, acc
@@ -330,7 +363,9 @@ func BuildMonitors(tlen int, specDeploy *SpecDeploy, reqs map[Id][]Msg) map[Id]*
 	nmons := specDeploy.Nmons
 	delta := specDeploy.Delta
 	//fmt.Printf("specDeploy delta: %v\n", delta)
+	//fmt.Printf("globalRoutes: %v\n", specDeploy.GlobalRoutes)
 	dists := ObtainDists(specDeploy.GlobalRoutes)
+	//fmt.Printf("distances: %v\n", dists)
 	depGraph := SpecToGraph(specDeploy.Spec)
 	dependencies := InterestedMonitors(delta, depGraph)
 	ttlMap := getTTLMap(depGraph, delta, dists)

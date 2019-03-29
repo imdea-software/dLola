@@ -89,15 +89,15 @@ var g = &grammar{
 						run: (*parser).callonTopo6,
 						expr: &ruleRefExpr{
 							pos:  position{line: 16, col: 4, offset: 250},
-							name: "RING",
+							name: "RINGSHORT",
 						},
 					},
 					&actionExpr{
-						pos: position{line: 17, col: 4, offset: 299},
+						pos: position{line: 17, col: 4, offset: 304},
 						run: (*parser).callonTopo8,
 						expr: &ruleRefExpr{
-							pos:  position{line: 17, col: 4, offset: 299},
-							name: "RINGSHORT",
+							pos:  position{line: 17, col: 4, offset: 304},
+							name: "RING",
 						},
 					},
 					&actionExpr{
@@ -3178,20 +3178,20 @@ var g = &grammar{
 			},
 		},
 		{
-			name: "RING",
+			name: "RINGSHORT",
 			pos:  position{line: 360, col: 1, offset: 11623},
 			expr: &litMatcher{
-				pos:        position{line: 360, col: 9, offset: 11631},
-				val:        "ring",
+				pos:        position{line: 360, col: 14, offset: 11636},
+				val:        "ringshort",
 				ignoreCase: false,
 			},
 		},
 		{
-			name: "RINGSHORT",
-			pos:  position{line: 361, col: 1, offset: 11638},
+			name: "RING",
+			pos:  position{line: 361, col: 1, offset: 11648},
 			expr: &litMatcher{
-				pos:        position{line: 361, col: 14, offset: 11651},
-				val:        "ringshort",
+				pos:        position{line: 361, col: 9, offset: 11656},
+				val:        "ring",
 				ignoreCase: false,
 			},
 		},

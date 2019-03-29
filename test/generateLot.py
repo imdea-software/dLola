@@ -73,8 +73,8 @@ def lotCentAccReset(TOPO, STREAM, LAZY, N):
     i = 0
     s += "\n@" + str(i) + "{\n" #start central node
     s += lotInput("num",STREAM, LAZY, i) #input central node
-    s += lotInput("bool","reset", LAZY, i)
     while i < N: #centralized computations
+        s += lotInput("bool","reset", LAZY, i) #reset signals will be in the central node (so Lazy decent produces a great result)
         s += lotAccResetOutput(STREAM, LAZY, i, i)
         i += 1
     s += "}\n" #central node
@@ -82,7 +82,6 @@ def lotCentAccReset(TOPO, STREAM, LAZY, N):
     while i < N: #decentralized observations
         s += "\n@" + str(i) + "{\n"
         s += lotInput("num",STREAM, LAZY, i)
-        s += lotInput("bool","reset", LAZY, i)
         s += "}\n" #no central node
         i += 1
     return s

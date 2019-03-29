@@ -178,6 +178,15 @@ func (m Monitor) triggered() bool {
 func (m Monitor) finished() bool {
 	return m.tracelen <= m.t && len(m.q) == 0 /*&& len(m.i) == 0*/ && len(m.pen) == 0 && len(m.out) == 0 //input will be consumed waiting until m.t == m.tracelen
 }
+func (m Monitor) computes(s StreamName) bool {
+	return m.delta[s] == m.nid
+}
+func (m Monitor) isEval(s StreamName) bool {
+	return m.expr.Output[s].Eval
+}
+func (m Monitor) isLazy(s StreamName) bool {
+	return !m.isEval(s)
+}
 func printU(u USet) string {
 	s := "map:["
 	for istream, und := range u {
@@ -320,6 +329,7 @@ func Tick(mons map[Id]*Monitor, cMons chan *Monitor, cTicks []chan struct{}) {
 		classifyOut(newMon, incomingQs)
 		mons[newMon.nid] = newMon //write back to the map
 	}
+	//fmt.Printf("incoming messages of each node:%v\n", incomingQs)
 	for nid, m := range mons {
 		//fmt.Printf("Before dispatch of mon %d:%s\n", m.nid, PrintMons(mons))
 		//m.dispatch(mons, incomingQs)
@@ -343,6 +353,7 @@ func processMon(m *Monitor, cMons chan *Monitor, cTicks chan struct{}) {
 
 //prepare the msgs classifying them by their nextHop, clear m.out
 func classifyOut(m *Monitor, incomingQs map[Id][]Msg) {
+	//fmt.Printf("mon %d sends msgs:%v\n", m.nid, m.out)
 	for _, msg := range m.out {
 		nextHopMon := m.routes[msg.Dst]                              //we look for the nextHop in the route from m to msg.Dst
 		incomingQs[nextHopMon] = append(incomingQs[nextHopMon], msg) //append msg to the incoming msgs of the destination
@@ -540,7 +551,7 @@ func createMsg(stream InstStreamExpr, resp *Resp, id, dst Id) Msg {
 func (m *Monitor) addReq() { //TODO: think of extracting part to the offline
 	//fmt.Printf("[%d]:ADDREQ: %s\n", m.nid, m.String())
 	for _, p := range m.pen {
-		if !m.expr.Output[p.Stream.GetName()].Eval { //we only need to analyze dependencies to create Reqs for LAZY streams!!
+		if !m.expr.Output[p.Stream.GetName()].Eval { //we only need to analyze dependencies to create Reqs for LAZY streams
 			createReqMsgsPen(p.Stream, m)
 		}
 	}
@@ -581,13 +592,13 @@ func obtainDependencies(stream InstStreamExpr, m *Monitor) []InstStreamExpr {
 	return dependencies
 }
 
-//will create a req msg for depStream and add it to out iff the stream is not in R, assigned to other monitor(delta), not previously requested, not eval and have been instanced
+//will create a req msg for depStream and add it to out iff the stream is not in R, assigned to other monitor(delta), not previously requested, lazy and have been instanced
 func createReqStream(depStream InstStreamExpr, m *Monitor) {
 	_, resolved := m.r[depStream]
 	_, requested := m.req[depStream]
-	//fmt.Printf("Dependency could be intantiated tlen: %d\n%s\n !resolved %t, !requested %t, !eval %t, assigned to other monitor: %t\n", m.tracelen, depStream.Sprint(), !resolved, !requested, !m.expr.Output[depStream.GetName()].Eval, m.delta[depStream.GetName()] != m.nid)
-	if !resolved && m.delta[depStream.GetName()] != m.nid && !m.expr.Output[depStream.GetName()].Eval && !requested && depStream.GetTick() <= m.t { //not in R, not assigned to this monitor, not eval and not already requested, allow request of streams that have not yet been instanced?
-		//fmt.Printf("Creatting Request: %s\n", depStream.Sprint())
+	//fmt.Printf("Dependency could be intantiated tlen: %d\n%s\n !resolved %t, !requested %t, lazy %t, assigned to other monitor: %t\n", m.tracelen, depStream.Sprint(), !resolved, !requested, m.isLazy(depStream.GetName()), !m.computes(depStream.GetName()))
+	if !resolved && !m.computes(depStream.GetName()) && m.isLazy(depStream.GetName()) && !requested && depStream.GetTick() <= m.t { //not in R, not assigned to this monitor, not eval and not already requested, allow request of streams that have not yet been instanced?
+		//fmt.Printf("Creating Request: %s\n", depStream.Sprint())
 		msg := createMsg(depStream, nil, m.nid, m.delta[depStream.GetName()])
 		m.sendMsg(&msg)
 		m.req[depStream] = struct{}{} //mark it as requested

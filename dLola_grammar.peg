@@ -13,8 +13,8 @@ Input <- _? t:Topo m:(MonitorDeclaration*) EOF {
 
 Topo <- CLIQUE {return Identifier{string(c.text)}, nil}
      	/ LINE {return Identifier{string(c.text)}, nil}
-	/ RING {return Identifier{string(c.text)}, nil}
 	/ RINGSHORT {return Identifier{string(c.text)}, nil}
+	/ RING {return Identifier{string(c.text)}, nil}
 	/ STAR {return Identifier{string(c.text)}, nil} 
 
 MonitorDeclaration <- _? AT n:NumLiteral "{" d:Decls "}" _? {return NewMonitorDecl(n,d),nil}
@@ -357,8 +357,8 @@ STRCONCAT <- "sConcat" _?
 AT <- "@"
 CLIQUE <- "clique"
 LINE <- "line"
-RING <- "ring"
 RINGSHORT <- "ringshort"
+RING <- "ring"
 STAR <- "star"
 
 /*Function <- n:Name '(' a:Args ')' { //TODO: return proper data

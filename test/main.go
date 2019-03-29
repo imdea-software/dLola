@@ -24,22 +24,5 @@ func main() {
 	}
 }
 
-/*func instantiateSpec(spec *dLola.Spec, tick, tlen int) {
-	if tick >= 0 && tick < tlen { //othw may produce errors!! for those streams with no shift
-		prefix := "[dLola_Monitor_Builder]: "
-		fmt.Printf("%sInstantiating spec for tick %d with tlen %d\n", prefix, tick, tlen)
-		for _, o := range spec.Output {
-			iexpr := o.Expr.InstantiateExpr(tick, tlen)
-			fmt.Printf("%sInstantiated Expression: %s = %s\n", prefix, o.Name, iexpr.Sprint())
-			s := dLola.InstStreamFetchExpr{"hard", 0}
-			v := dLola.InstIntLiteralExpr{2}
-			sexpr := iexpr.Substitute(s, v)
-			fmt.Printf("%sSubstituted Expression with pair: %s = %s\n %s = %s\n", prefix, s.Sprint(), v.Sprint(), o.Name, sexpr.Sprint())
-			simpExpr, _ := sexpr.Simplify()
-			fmt.Printf("%sSimplified Expression %s = %s\n", prefix, o.Name, simpExpr.Sprint())
-		}
-	}
-}
-*/
 //topology & nmons are declared in the spec
 //go run main.go inputMonitor.txt past trigger 2

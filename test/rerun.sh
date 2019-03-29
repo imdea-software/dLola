@@ -35,7 +35,7 @@ function processFile {
     file=$2
     #echo $file
     DATESEC=$(date --rfc-3339='seconds')
-    DATE=$(date --rfc-3339='date')
+    #DATE=$(date --rfc-3339='date')
     TEXT=""
     TEXT=$TEXT"[rerun.sh]: ($DATESEC) executing file $dir/$OFILE \n"
     #echo $PROGRAM $file $OPTIONS
@@ -45,7 +45,7 @@ function processFile {
     RESULT=$(python ./processOutput.pyc "${file}" "${TEXT}" "${TLEN}")
     echo $RESULT
     #get exclusive lock of file before appending to it, had race conditions when I did not use this
-    flock -x $dir/results$DATE.txt printf "${RESULT}\n" >> $CODEDIR/results$DATE.txt
+    flock -x $CODEDIR/results$DATE.txt printf "${RESULT}\n" >> $CODEDIR/results$DATE.txt
 }
 
 
@@ -65,8 +65,10 @@ PROGRAM="go run main.go" #generated/clique/num/eval/decent/10/lotAcc.txt
 
 python -m py_compile processOutput.py
 chmod 770 *.pyc
+DATE=$(date --rfc-3339='date')
+flock -x $CODEDIR/results$DATE.txt printf "topo,type,lazy,cent,nmons,spec,tracelen,totalMsgs,totalPayload,totalRedirects,maxDelay,maxSimplRounds\n" > $CODEDIR/results$DATE.txt
 processDir $CODEDIR $PROC $OPTIONS
 
-#run them as requests, NOT TRIGGERS, othw it will terminate as soon as the first trigger gets resolved!!! (and the performance won't be accurate)
+#run them as requests, NOT TRIGGERS, othw it will terminate as soon as the first trigger gets resolved!!! (and the performance won't be realistic)
 #./rerun.sh /home/luismigueldanielsson/go/src/gitlab.software.imdea.org/luismiguel.danielsson/dLola/test/generated 4 spec "past req" 10
 #./rerun.sh /home/luismigueldanielsson/go/src/gitlab.software.imdea.org/luismiguel.danielsson/dLola/test/generated 4 spec "past trigger" 10
