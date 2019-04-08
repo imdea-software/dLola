@@ -60,7 +60,7 @@ EXT=$3
 OPTIONS=$4
 TLEN=$5
 OPTIONS="${OPTIONS} ${TLEN}"
-PROGRAM="go run main.go" #generated/clique/num/eval/decent/10/lotAcc.txt
+PROGRAM="go run main.go" #generated/clique/num/eval/decent/10/lotAcc.txt #./dLolaSys
 #printf $CODEDIR
 
 python -m py_compile processOutput.py
@@ -72,3 +72,11 @@ processDir $CODEDIR $PROC $OPTIONS
 #run them as requests, NOT TRIGGERS, othw it will terminate as soon as the first trigger gets resolved!!! (and the performance won't be realistic)
 #./rerun.sh /home/luismigueldanielsson/go/src/gitlab.software.imdea.org/luismiguel.danielsson/dLola/test/generated 4 spec "past req" 10
 #./rerun.sh /home/luismigueldanielsson/go/src/gitlab.software.imdea.org/luismiguel.danielsson/dLola/test/generated 4 spec "past trigger" 10
+
+#server
+#compiling for the server in dLola/test where main.go is located
+#go build -buildmode=exe -o dLolaSys
+#scp dLolaSys rerun.sh generateAllTests.sh generateLot.py processOutput.py luismiguel.danielsson@zeus.software.imdea.org:~/RV/go/
+#./generateAll.sh ./generated
+#use just 8 processes in order not to exhaust the server resources (and not get errors therefore)
+#./rerun.sh ~/RV/go/generated 8 spec "past req" 100000

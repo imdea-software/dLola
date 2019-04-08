@@ -2,6 +2,7 @@ package dLola
 
 import (
 	//	"errors"
+	"encoding/json"
 	"fmt"
 	"math"
 	//	"strconv"
@@ -60,7 +61,7 @@ func (msg Msg) String() string {
 		simpl = fmt.Sprintf("%d", msg.SimplRounds)
 	}
 	return fmt.Sprintf("Msg{ kind = %s\nstream = %s\nvalue = %s\nresTime = %s\nsimplRounds = %s\nsrc = %d\ndst = %d\n}", msg.Kind.String(), msg.Stream.Sprint(), value, resTime, simpl, msg.Src, msg.Dst)
-	//return fmt.Sprintf("Msg{ kind = %s\nstream = %s\nresp = %s\nsrc = %d\ndst = %d\n}", msg.Kind.String(), msg.Stream.Sprint(), resp, msg.Src, msg.Dst)
+	//return fmt.Sprintf("Msg{ kind = %s\nstream = %s\nResp = %s\nsrc = %d\ndst = %d\n}", msg.Kind.String(), msg.Stream.Sprint(), Resp, msg.Src, msg.Dst)
 }
 
 func Equal(msg Msg, msg2 Msg) bool {
@@ -108,25 +109,38 @@ type Requested = map[InstStreamExpr]struct{} //S.Set Stream
 type SimplRounds = int
 type Eval = bool //won't need a Req to be sent to its destiny, will be flipped after creating the Msg to avoid duplicates
 type Resp struct {
-	value       InstExpr //LolaType
-	eval        Eval
-	resTime     Time
-	simplRounds SimplRounds
-	ttl         Time
+	Value       InstExpr //LolaType
+	Eval        Eval
+	ResTime     Time
+	SimplRounds SimplRounds
+	Ttl         Time
 } //result, Eval|Lazy, time at which the result was obtained, #of calls to simplExp
 
 func (r *Resp) Sprint() string {
-	return fmt.Sprintf("Resp{value = %s\neval = %t\nresTime = %d\nsimplRounds = %d\nttl = %d\n}", r.value.Sprint(), r.eval, r.resTime, r.simplRounds, r.ttl)
+	//return fmt.Sprintf("Resp{Value = %s, eval = %t, ResTime = %d, SimplRounds = %d, Ttl = %d}", r.Value.Sprint(), r.eval, r.ResTime, r.SimplRounds, r.Ttl)
+	json, _ := json.Marshal(r)
+	return string(json)
 }
 
 type Resolved struct {
-	stream InstStreamExpr
-	resp   Resp
+	Stream InstStreamExpr
+	Resp   Resp
 }
+
+func (r *Resolved) String() string {
+	/*s := ""
+	if r != nil {
+		s = fmt.Sprintf("Resolved: {%s, %s}", r.stream.Sprint(), r.Resp.Sprint())
+	}
+	return s*/
+	json, _ := json.Marshal(r)
+	return string(json)
+}
+
 type Und struct {
 	exp          InstExpr
-	eval         Eval
-	simplRounds  SimplRounds
+	Eval         Eval
+	SimplRounds  SimplRounds
 	simplifiable bool //will be set to true at initialization and whenever something gets substituted, othw it will be false to avoid trying to simplify over and over the same expression without changes
 }
 type Unresolved struct {
@@ -142,34 +156,53 @@ type RSet = map[InstStreamExpr]Resp //M.Map Stream Resp
 type USet = map[InstStreamExpr]Und  //M.Map Stream Und
 //type ExpSet = Spec                  //M.Map Stream (Exp, Eval)
 
+type Metrics struct {
+	NumMsgs        int
+	SumPayload     int
+	RedirectedMsgs int // part of numMsgs
+	MaxDelay       *Resolved
+	AvgDelay       float64
+	MinDelay       *Resolved
+	MaxSimplRounds *Resolved
+	AvgSimplRounds float64
+	MinSimplRounds *Resolved
+	Memory         []int
+}
+
+func (m Metrics) String() string {
+	return fmt.Sprintf("Metrics: {numMsgs: %d, sumPayload: %d, redirectedMsgs: %d\n MaxDelay: %s\n, avgDelay: %f\n, MinDelay: %s\n MaxSimplRounds: %s\n avgSimplRounds: %f\n MinSimplRounds: %s\n memory: %v}", m.NumMsgs, m.SumPayload, m.RedirectedMsgs, m.MaxDelay.String(), m.AvgDelay, m.MinDelay.String(), m.MaxSimplRounds.String(), m.AvgSimplRounds, m.MinSimplRounds.String(), m.Memory)
+}
+
+func (m Metrics) Short() string {
+	return fmt.Sprintf("Metrics: {numMsgs: %d, sumPayload: %d, redirectedMsgs: %d,\n MaxDelay: %d, AvgDelay: %f, MinDelay: %d,\n MaxSimplRounds: %d, AvgSimplRounds: %f, MinSimplRounds: %d,\n memory: %v}", m.NumMsgs, m.SumPayload, m.RedirectedMsgs, m.MaxDelay.Resp.ResTime, m.AvgDelay, m.MinDelay.Resp.ResTime, m.MaxSimplRounds.Resp.SimplRounds, m.AvgSimplRounds, m.MinSimplRounds.Resp.SimplRounds, m.Memory)
+}
+
 type Monitor struct {
-	nid            Id
-	q              Received
-	i              []chan Resolved
-	u              USet
-	r              RSet
-	expr           Spec //contains eval Streams
-	pen            Pending
-	out            Output
-	req            Requested
-	t              Time
-	routes         map[Id]Id         //M.Map Id Id
-	delta          map[StreamName]Id //in which node the stream will be computed
-	tracelen       int
-	numMsgs        int
-	sumPayload     int
-	redirectedMsgs int                 // part of numMsgs
-	depGraph       DepGraphAdj         //dependencies among streams
-	dep            map[StreamName][]Id //Monitors that need the value of the stream (should be coherent to delta)
-	trigger        []Resolved
-	ttlMap         map[StreamName]Time                 //ttl of each resolved stream (in R), will be decremented in each tick, when 0 it will be removed AT START >=1
-	instStreamDep  map[InstStreamExpr][]InstStreamExpr //list of all the other InstStreamExprs that an instanced stream need to be computed(without simplifying)
+	nid           Id
+	q             Received                            //input msgs queue
+	i             []chan Resolved                     //input read at monitor(local)
+	u             USet                                //unresolved expressions
+	r             RSet                                //resolved expressions
+	expr          Spec                                //specification, contains eval Streams
+	pen           Pending                             //pending msgs to respond
+	out           Output                              //outgoing msgs
+	req           Requested                           //requested streams
+	t             Time                                //actual tick
+	routes        map[Id]Id                           //routes as map destiny nexthop
+	delta         map[StreamName]Id                   //in which node the stream will be computed
+	tracelen      int                                 //length of the input trace
+	depGraph      DepGraphAdj                         //dependencies among streams
+	dep           map[StreamName][]Id                 //Monitors that need the value of the stream (should be coherent to delta)
+	trigger       []Resolved                          //resolved streams that were marked as triggers and will halt the execution of the system
+	ttlMap        map[StreamName]Time                 //for Pruning R: ttl of each resolved stream (in R), will be decremented in each tick, when 0 it will be removed AT START >=1
+	instStreamDep map[InstStreamExpr][]InstStreamExpr //list of all the other InstStreamExprs that an instanced stream need to be computed(without simplifying)
+	metrics       Metrics                             //Metrics to measure performance
 }
 
 func (n Monitor) String() string {
 	s := fmt.Sprintf("\n###############\n Node { nid = %d\n q = %s\n i = %v\n u = %v\n r = %s\n expr = %v\n pen = %v\n out = %v\n req = %v\n t = %d\n routes = %v\n delta = %v\n tracelen = %v\n"+
-		" numMsgs = %d\n sumPayload = %d\n redirectedMsgs = %d\n dep = %v\n trigger = %v\n ttlMap = %v\n instStreamDep = %v\n} ################\n",
-		n.nid, n.q, n.i, printU(n.u), printR(n.r), PrettyPrintSpec(&(n.expr), ""), n.pen, n.out, n.req, n.t, n.routes, n.delta, n.tracelen, n.numMsgs, n.sumPayload, n.redirectedMsgs, n.dep, n.trigger, n.ttlMap, n.instStreamDep)
+		" dep = %v\n trigger = %v\n ttlMap = %v\n instStreamDep = %v\n metrics = %v\n} ################\n",
+		n.nid, n.q, n.i, printU(n.u), printR(n.r), PrettyPrintSpec(&(n.expr), ""), n.pen, n.out, n.req, n.t, n.routes, n.delta, n.tracelen, n.dep, n.trigger, n.ttlMap, n.instStreamDep, n.metrics)
 	return s
 }
 func (m Monitor) triggered() bool {
@@ -190,7 +223,7 @@ func (m Monitor) isLazy(s StreamName) bool {
 func printU(u USet) string {
 	s := "map:["
 	for istream, und := range u {
-		s += fmt.Sprintf("%s : {%s, %t, %d, %t}; ", istream.Sprint(), und.exp.Sprint(), und.eval, und.simplRounds, und.simplifiable)
+		s += fmt.Sprintf("%s : {%s, %t, %d, %t}; ", istream.Sprint(), und.exp.Sprint(), und.Eval, und.SimplRounds, und.simplifiable)
 	}
 	s += "]"
 	return s
@@ -198,7 +231,7 @@ func printU(u USet) string {
 func printR(r RSet) string {
 	s := "map:["
 	for stream, resp := range r {
-		s += fmt.Sprintf("%s : {%s, %t, %d, %d}; ", stream.Sprint(), resp.value.Sprint(), resp.eval, resp.resTime, resp.simplRounds)
+		s += fmt.Sprintf("%s : {%s, %t, %d, %d}; ", stream.Sprint(), resp.Value.Sprint(), resp.Eval, resp.ResTime, resp.SimplRounds)
 	}
 	s += "]"
 	return s
@@ -213,29 +246,27 @@ func PrintMons(ms map[Id]*Monitor) string {
 }
 
 func NewMonitor(id, tracelen int, s Spec, received Received, routes map[Id]Id, delta map[StreamName]Id, depGraph DepGraphAdj, dep map[StreamName][]Id, inputChannels []chan Resolved, ttlMap map[StreamName]Time) Monitor {
-	return Monitor{id, received, inputChannels, make(USet), make(RSet), s, Pending{}, Output{}, Requested{}, 0, routes, delta, tracelen, 0, 0, 0, depGraph, dep, make([]Resolved, 0), ttlMap, make(map[InstStreamExpr][]InstStreamExpr)}
+	return Monitor{id, received, inputChannels, make(USet), make(RSet), s, Pending{}, Output{}, Requested{}, 0, routes, delta, tracelen, depGraph, dep, make([]Resolved, 0), ttlMap, make(map[InstStreamExpr][]InstStreamExpr), Metrics{0, 0, 0, nil, 0.0, nil, nil, 0.0, nil, make([]int, 0)}}
 }
 
 type Verdict struct {
-	mons                                                              map[Id]*Monitor
-	totalMsgs, totalPayload, totalRedirects, maxDelay, maxSimplRounds int
-	maxDelayStream, maxSimplRoundsStream                              *Resolved
-	triggers                                                          []Resolved
+	mons map[Id]*Monitor
+	//totalMsgs, totalPayload, totalRedirects, maxDelay, maxSimplRounds int
+	//maxDelayStream, maxSimplRoundsStream *Resolved
+	Metrics  Metrics
+	Triggers []Resolved
 }
 
 func (v Verdict) String() string {
-	sMaxDelay := ""
-	if v.maxDelayStream != nil {
-		sMaxDelay = fmt.Sprintf("%v", v.maxDelayStream)
-	}
-	sMaxSimplRounds := ""
-	if v.maxSimplRoundsStream != nil {
-		sMaxSimplRounds = fmt.Sprintf("%v", v.maxSimplRoundsStream)
-	}
-	return fmt.Sprintf("Verdict{mons = %s\ntotalMsgs: %d totalPayload: %d totalRedirects: %d, maxdelay %d, maxSimplRounds %d\ntriggers: %v, maxDelayStream %s\n, maxSimplRoundsStream: %s}", PrintMons(v.mons), v.totalMsgs, v.totalPayload, v.totalRedirects, v.maxDelay, v.maxSimplRounds, v.triggers, sMaxDelay, sMaxSimplRounds)
+	//return fmt.Sprintf("Verdict{mons = %s,\n metrics: %v,\n triggers: %v}", PrintMons(v.mons), v.metrics.String(), v.triggers)
+	json, _ := json.Marshal(v)
+	return string(json)
 }
 func (v Verdict) Short() string {
-	return fmt.Sprintf("Verdict{totalMsgs: %d totalPayload: %d totalRedirects: %d maxDelay: %d, maxSimplRounds: %d\ntriggers: %v}", v.totalMsgs, v.totalPayload, v.totalRedirects, v.maxDelay, v.maxSimplRounds, v.triggers)
+	//return fmt.Sprintf("Verdict{metrics: %v\ntriggers: %v}", v.metrics.Short(), v.triggers)
+	//return fmt.Sprintf("Verdict: {%s, \ntriggers: %v}", v.metrics.Short(), v.triggers)
+	json, _ := json.Marshal(v)
+	return string(json)
 }
 
 func ConvergeCountTrigger(mons map[Id]*Monitor) Verdict {
@@ -243,29 +274,63 @@ func ConvergeCountTrigger(mons map[Id]*Monitor) Verdict {
 	totalMsgs := 0
 	totalPayload := 0
 	totalRedirects := 0
-	/*var maxdelay *Resolved
-	var maxSimplRounds *Resolved*/
-	maxdelay := Resolved{InstStreamFetchExpr{"s", -1}, Resp{InstIntLiteralExpr{0}, false, 0, 0, 0}}
-	maxSimplRounds := Resolved{InstStreamFetchExpr{"s", -1}, Resp{InstIntLiteralExpr{0}, false, 0, 0, 0}}
+	/*var Maxdelay *Resolved
+	var MaxSimplRounds *Resolved*/
+	var Maxdelay *Resolved //Resolved{InstStreamFetchExpr{"s", -1}, Resp{InstIntLiteralExpr{0}, false, 0, 0, 0}}
+	Avgdelay := 0.0
+	var Mindelay *Resolved
+	var Maxsimplrounds *Resolved //:= Resolved{InstStreamFetchExpr{"s", -1}, Resp{InstIntLiteralExpr{0}, false, 0, 0, 0}}
+	Avgsimplrounds := 0.0
+	var Minsimplrounds *Resolved
+	var totalmemory []int
 	triggers := make([]Resolved, 0)
 	for _, m := range mons {
-		totalMsgs += m.numMsgs
-		totalPayload += m.sumPayload
-		totalRedirects += m.redirectedMsgs
+		//fmt.Printf("%s\n", m.String())
+		totalMsgs += m.metrics.NumMsgs
+		totalPayload += m.metrics.SumPayload
+		totalRedirects += m.metrics.RedirectedMsgs
 		//r := Resolved{InstStreamFetchExpr{"s", -1}, Resp{InstIntLiteralExpr{0}, false, 0, 0, 0}}
-		for stream, resp := range m.r {
-			if /* maxdelay == nil || */ maxdelay.resp.resTime < resp.resTime {
-				maxdelay.stream = stream
-				maxdelay.resp = resp
-			}
-			if /* maxSimplRounds == nil ||*/ maxSimplRounds.resp.simplRounds < resp.simplRounds {
-				maxSimplRounds.stream = stream
-				maxSimplRounds.resp = resp
-			}
+		//for _, m := range mons {
+		if m.metrics.MaxDelay != nil && (Maxdelay == nil || Maxdelay.Resp.ResTime < m.metrics.MaxDelay.Resp.ResTime) {
+			Maxdelay = m.metrics.MaxDelay
+			//Maxdelay.Resp = Resp
 		}
+		Avgdelay += m.metrics.AvgDelay
+		if m.metrics.MinDelay != nil && (Mindelay == nil || Mindelay.Resp.ResTime < m.metrics.MinDelay.Resp.ResTime) {
+			Mindelay = m.metrics.MinDelay
+			//mindelay.Resp = Resp
+		}
+		if m.metrics.MaxSimplRounds != nil && (Maxsimplrounds == nil || Maxsimplrounds.Resp.SimplRounds < m.metrics.MaxSimplRounds.Resp.SimplRounds) {
+			Maxsimplrounds = m.metrics.MaxSimplRounds
+			//Maxsimplrounds.Resp = Resp
+		}
+		Avgsimplrounds += m.metrics.AvgDelay
+		if m.metrics.MinSimplRounds != nil && (Minsimplrounds == nil || Minsimplrounds.Resp.SimplRounds < m.metrics.MinSimplRounds.Resp.SimplRounds) {
+			Minsimplrounds = m.metrics.MinSimplRounds
+			//minsimplrounds.Resp = Resp
+		}
+		//TODO:addition of memories
+		//fmt.Printf("Memory of mon: %d, %v", m.nid, m.metrics.memory)
+		if len(totalmemory) == 0 {
+			totalmemory = m.metrics.Memory
+		} else {
+			addMemories(totalmemory, m.metrics.Memory)
+			m.metrics.Memory = make([]int, 0) //reset them to measure in the next tick
+		}
+		//}
+		Avgdelay /= float64(len(mons))
+		Avgsimplrounds /= float64(len(mons))
 		triggers = append(triggers, m.trigger...)
 	}
-	return Verdict{mons, totalMsgs, totalPayload, totalRedirects, maxdelay.resp.resTime, maxSimplRounds.resp.simplRounds, &maxdelay, &maxSimplRounds, triggers}
+	return Verdict{mons, Metrics{totalMsgs, totalPayload, totalRedirects, Maxdelay, Avgdelay, Mindelay, Maxsimplrounds, Avgsimplrounds, Minsimplrounds, totalmemory}, triggers}
+}
+
+//both slices have the same length
+func addMemories(totalmemory, memory []int) {
+	//fmt.Printf("Adding memories: %v, %v\n", totalmemory, memory)
+	for i, mt := range totalmemory {
+		totalmemory[i] = mt + memory[i]
+	}
 }
 
 func Converge(mons map[Id]*Monitor) {
@@ -372,8 +437,8 @@ func classifyOut(m *Monitor, incomingQs map[Id][]Msg) {
 func (m *Monitor) sendMsg(msg *Msg) {
 	//fmt.Printf("Sending msg: %s\n", msg.String())
 	m.out = append(m.out, *msg)
-	m.numMsgs++
-	m.sumPayload += payload(*msg)
+	m.metrics.NumMsgs++
+	m.metrics.SumPayload += payload(*msg)
 }
 
 func (m *Monitor) process() {
@@ -383,7 +448,9 @@ func (m *Monitor) process() {
 	m.simplify()
 	m.addRes()
 	m.addReq()
+	m.measureBeforePruning()
 	m.pruneR()
+	m.measureAfterPruning()
 	m.t++
 }
 
@@ -392,7 +459,7 @@ func (m *Monitor) processQ() {
 	for _, msg := range m.q {
 		if msg.Dst != m.nid { //redirect msgs whose dst is not this node
 			m.sendMsg(&msg)
-			m.redirectedMsgs++
+			m.metrics.RedirectedMsgs++
 		} else {
 			switch msg.Kind {
 			case Res:
@@ -413,7 +480,7 @@ func msgToResp(msg *Msg, ttlMap map[StreamName]Time, spec *Spec) Resp { //TODO: 
 		ttl = ttlMap[msg.Stream.GetName()]
 	}
 	/*r := *msg.Resp
-	r.eval = false //received responses are marked as LAZY, so as not to send them again and flood the net!!
+	r.Eval = false //received responses are marked as LAZY, so as not to send them again and flood the net!!
 	r.ttl = ttl*/
 	return Resp{*msg.Value, false, *msg.ResTime, *msg.SimplRounds, ttl} //received responses are marked as LAZY, so as not to send them again and flood the net!!
 }
@@ -425,7 +492,7 @@ func (m *Monitor) readInput() {
 		for _, c := range m.i {
 			r := <-c
 			//fmt.Printf("Getting Input %v", r)
-			m.r[r.stream] = r.resp
+			m.r[r.Stream] = r.Resp
 		}
 	}
 
@@ -459,14 +526,14 @@ func (m *Monitor) simplify() {
 				resp, ok := m.r[depStream]
 				if ok { //we found the value of the dependency stream in R
 					//fmt.Printf("[%d]and we have its value\n %s\n", m.nid, und.exp.Sprint())
-					und.exp = und.exp.Substitute(depStream, resp.value)
+					und.exp = und.exp.Substitute(depStream, resp.Value)
 					und.simplifiable = true //set it to true so the expression will be simplified (if possible)
 					//fmt.Printf("[%d]after subs %s\n", m.nid, und.exp.Sprint())
 				}
 			}
 			if und.simplifiable {
 				und.exp = SimplifyExpr(und.exp)
-				und.simplRounds++
+				und.SimplRounds++
 				und.simplifiable = false
 				m.u[stream] = und //store the substituted and simplified expression
 				newresp, isResolved := toResp(stream, m.t, und, m.ttlMap)
@@ -487,15 +554,15 @@ func toResp(stream InstStreamExpr, t int, und Und, ttlMap map[StreamName]Time) (
 	ttl := int(math.Max(0, float64(ttlMap[stream.GetName()]-(t-stream.GetTick())))) //time remaining to remove from R: ttl - max(0, now-instantiation)
 	switch und.exp.(type) {
 	case InstTruePredicate:
-		return Resp{und.exp, und.eval, t, und.simplRounds, ttl}, true
+		return Resp{und.exp, und.Eval, t, und.SimplRounds, ttl}, true
 	case InstFalsePredicate:
-		return Resp{und.exp, und.eval, t, und.simplRounds, ttl}, true
+		return Resp{und.exp, und.Eval, t, und.SimplRounds, ttl}, true
 	case InstIntLiteralExpr:
-		return Resp{und.exp, und.eval, t, und.simplRounds, ttl}, true
+		return Resp{und.exp, und.Eval, t, und.SimplRounds, ttl}, true
 	case InstFloatLiteralExpr:
-		return Resp{und.exp, und.eval, t, und.simplRounds, ttl}, true
+		return Resp{und.exp, und.Eval, t, und.SimplRounds, ttl}, true
 	case InstStringLiteralExpr:
-		return Resp{und.exp, und.eval, t, und.simplRounds, ttl}, true
+		return Resp{und.exp, und.Eval, t, und.SimplRounds, ttl}, true
 	default:
 		//fmt.Printf("Not resolved")
 		return r, false
@@ -505,7 +572,7 @@ func toResp(stream InstStreamExpr, t int, und Und, ttlMap map[StreamName]Time) (
 func (m *Monitor) addRes() {
 	//fmt.Printf("[%d]:ADDRES: %s\n", m.nid, m.String())
 	for stream, resp := range m.r {
-		if resp.eval && stream.GetTick() <= m.t && stream.GetTick() < m.tracelen { //EVAL streams
+		if resp.Eval && stream.GetTick() <= m.t && stream.GetTick() < m.tracelen { //EVAL streams
 			if destinies, ok := m.dep[stream.GetName()]; ok {
 				for _, d := range destinies {
 					if d != m.nid {
@@ -514,8 +581,8 @@ func (m *Monitor) addRes() {
 						m.sendMsg(&msg)
 					}
 				}
-				resp.eval = false
-				m.r[stream] = resp //we mark the resp as already sent to interested monitors, TODO: search for a way to do resp.eval = false and make it persistent, so we avoid this unnecessary alloc
+				resp.Eval = false
+				m.r[stream] = resp //we mark the resp as already sent to interested monitors, TODO: search for a way to do resp.Eval = false and make it persistent, so we avoid this unnecessary alloc
 			}
 		}
 	}
@@ -543,9 +610,9 @@ func createMsg(stream InstStreamExpr, resp *Resp, id, dst Id) Msg {
 	if resp == nil {
 		return Msg{Req, stream, nil, nil, nil, id, dst}
 	}
-	val := resp.value
-	time := resp.resTime
-	simpl := resp.simplRounds
+	val := resp.Value
+	time := resp.ResTime
+	simpl := resp.SimplRounds
 	return Msg{Res, stream, &val, &time, &simpl, id, dst}
 }
 func (m *Monitor) addReq() { //TODO: think of extracting part to the offline
@@ -629,14 +696,54 @@ func addNextLevelDependencies(dependencies, candidates []InstStreamExpr, r RSet)
 	return dependencies
 }
 
+func (m *Monitor) measureBeforePruning() {
+	//fmt.Printf("Measures: %v\n", m.metrics)
+	Maxdelay := m.metrics.MaxDelay
+	Avgdelay := 0.0
+	Mindelay := m.metrics.MinDelay
+	Maxsimplrounds := m.metrics.MaxSimplRounds
+	Avgsimplrounds := 0.0
+	Minsimplrounds := m.metrics.MinSimplRounds
+
+	for stream, resp := range m.r {
+		//fmt.Printf("R elem: %s, %v\n", stream.Sprint(), resp)
+		if Maxdelay == nil || resp.ResTime > Maxdelay.Resp.ResTime {
+			Maxdelay = &Resolved{stream, resp}
+		}
+		Avgdelay += float64(resp.ResTime)
+		if Mindelay == nil || resp.ResTime < Mindelay.Resp.ResTime {
+			Mindelay = &Resolved{stream, resp}
+		}
+		if Maxsimplrounds == nil || resp.SimplRounds > Maxsimplrounds.Resp.SimplRounds {
+			Maxsimplrounds = &Resolved{stream, resp}
+		}
+		Avgsimplrounds += float64(resp.SimplRounds)
+		if Minsimplrounds == nil || resp.SimplRounds < Minsimplrounds.Resp.SimplRounds {
+			Minsimplrounds = &Resolved{stream, resp}
+		}
+	}
+	m.metrics.MaxDelay = Maxdelay
+	m.metrics.AvgDelay = Avgdelay
+	m.metrics.MinDelay = Mindelay
+	m.metrics.MaxSimplRounds = Maxsimplrounds
+	m.metrics.AvgSimplRounds = Avgsimplrounds
+	m.metrics.MinSimplRounds = Minsimplrounds
+	//fmt.Printf("Updated Measures: %v\n", m.metrics)
+}
+
 //R Pruning
 func (m *Monitor) pruneR() {
 	for stream, resp := range m.r {
-		if resp.ttl == 0 {
+		if resp.Ttl == 0 {
 			delete(m.r, stream)
 		} else {
-			resp.ttl--
+			resp.Ttl--
 			m.r[stream] = resp
 		}
 	}
+}
+
+func (m *Monitor) measureAfterPruning() {
+	//fmt.Printf("memory u: %v, r: %v\n", m.u, m.r)
+	m.metrics.Memory = append(m.metrics.Memory, len(m.u)+len(m.r)) //R will be already pruned, a measure will be taken at each tick
 }

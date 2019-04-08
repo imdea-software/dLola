@@ -99,7 +99,7 @@ NegExpr     <- NOT p:NegExpr { return NewBooleanExpr(NewNotPredicate(p)),nil }
 	 /  p:Primary { return p,nil }
 	 
 Primary   <- '(' _? p:BooleanExpr ')' _?  { return p,nil }
-	   / n:NumComparison               { fmt.Printf("NumComparison \n");return NewNumComparisonPredicate(n),nil } //old: BooleanExprToExpr(NewNumComparisonPredicate(n)),nil
+	   / n:NumComparison               { /*fmt.Printf("NumComparison \n");*/return NewNumComparisonPredicate(n),nil } //old: BooleanExprToExpr(NewNumComparisonPredicate(n)),nil
 	   / s:StrComparison  {return NewStrComparisonPredicate(s),nil} //old:BooleanExprToExpr(NewStr...)
 	   / a:AtomicBool {return a, nil}  // old:return a,nil testing:getBoolExpr(a)
 

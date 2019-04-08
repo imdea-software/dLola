@@ -27,7 +27,7 @@ func produceEvent(s StreamName, t StreamType, eval bool, c chan Resolved, tlen i
 				v = InstFalsePredicate{p}
 			}
 		case NumT:
-			v = InstIntLiteralExpr{i}
+			v = InstIntLiteralExpr{i + 1}
 		case StringT:
 			v = InstStringLiteralExpr{string(i)}
 		default:

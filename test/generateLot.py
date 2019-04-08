@@ -157,6 +157,101 @@ def lotCentUntil(TOPO, TYPE, STREAM, LAZY, N):
         i += 1
     return s
 
+def lotDecentAutosar(TOPO, TYPE, STREAM, LAZY, N):
+    s= TOPO + '''\n//Monitor chassis system
+@0{
+const num direction_tolerance = 0.2
+input num yaw ''' +LAZY + ''' //real wheel direction 100, 100 in percentage
+input num steering ''' +LAZY + ''' //driver desired direction 100, 100
+input bool drive_wheel_slip ''' +LAZY + '''
+input num b1 ''' +LAZY + ''' //brakes front left
+input num b2 ''' +LAZY + ''' //brakes front right
+input num b3 ''' +LAZY + ''' //brake rear left
+input num b4 ''' +LAZY + ''' //brakes rear right
+define num direction_deviation ''' +LAZY + ''' = steering - yaw //this way we know the direction of the deviation
+output bool activate_ESP ''' +LAZY + ''' = (direction_deviation > 0 and direction_deviation > direction_tolerance) or (direction_deviation < 0 and direction_deviation < direction_tolerance) or drive_wheel_slip
+output num brake1 ''' +LAZY + ''' = if activate_ESP then direction_deviation + b1[-1|0] else 0 //or whatever that activates the correct brake with the correct force
+output num requested_throttle ''' +LAZY + ''' = if activate_ESP then requested_throttle[-1|0] - direction_deviation else 0 //or whatever correction needs to be applied to the throttle of the engine
+output num requested_torque_distr ''' +LAZY + ''' = if activate_ESP then requested_torque_distr[-1|0] - direction_deviation else 0 // or whatever correction needs to be applied to the torque provided by the transmision
+}
+
+//Monitor Engine
+@1{
+const num throttle_tolerance = 0.1
+input num actual_throttle ''' +LAZY + '''
+output bool correct_throttle ''' +LAZY + ''' = requested_throttle[-1|1]/actual_throttle <= throttle_tolerance
+}
+
+//Monitor Transmission
+@2{
+const num torque_distr_tolerance = 0.1
+input num actual_torque_distr ''' +LAZY + '''
+output bool correct_torque_distr ''' +LAZY + ''' = requested_torque_distr[-1|1]/actual_torque_distr <= torque_distr_tolerance
+}
+
+//Monitor PowerTrain Coordinator central monitor
+@3{
+output bool all_correct ''' +LAZY + ''' = correct_throttle and correct_torque_distr
+output bool box_all_correct ''' +LAZY + ''' = all_correct and box_all_correct[-1|true]
+}\n'''
+    i = 4
+    while i < N:
+        s += "@" + str(i) + "{\n}\n"
+        i+=1
+    return s
+
+
+def lotCentAutosar(TOPO, TYPE, STREAM, LAZY, N):
+    s= TOPO + '''\n//Monitor chassis system
+@0{
+const num direction_tolerance = 0.2
+input num yaw ''' +LAZY + ''' //real wheel direction 100, 100 in percentage
+input num steering ''' +LAZY + ''' //driver desired direction 100, 100
+input bool drive_wheel_slip''' +LAZY + '''
+input num b1 ''' +LAZY + ''' //brakes front left
+input num b2 ''' +LAZY + ''' //brakes front right
+input num b3 ''' +LAZY + ''' //brake rear left
+input num b4 ''' +LAZY + ''' //brakes rear right
+define num direction_deviation ''' +LAZY + ''' = steering - yaw //this way we know the direction of the deviation
+output bool activate_ESP ''' +LAZY + ''' = (direction_deviation > 0 and direction_deviation > direction_tolerance) or (direction_deviation < 0 and direction_deviation < direction_tolerance) or drive_wheel_slip
+output num brake1 ''' +LAZY + ''' = if activate_ESP then direction_deviation + b1[-1|0] else 0 //or whatever that activates the correct brake with the correct force
+output num requested_throttle ''' +LAZY + ''' = if activate_ESP then requested_throttle[-1|0] - direction_deviation else 0 //or whatever correction needs to be applied to the throttle of the engine
+output num requested_torque_distr ''' +LAZY + ''' = if activate_ESP then requested_torque_distr[-1|0] - direction_deviation else 0 // or whatever correction needs to be applied to the torque provided by the transmision
+
+//Monitor Engine
+const num throttle_tolerance = 0.1
+
+output bool correct_throttle ''' +LAZY + ''' = requested_throttle[-1|1]/actual_throttle <= throttle_tolerance
+
+//Monitor Transmission
+const num torque_distr_tolerance = 0.1
+
+output bool correct_torque_distr ''' +LAZY + ''' = requested_torque_distr[-1|1]/actual_torque_distr <= torque_distr_tolerance
+
+//Monitor PowerTrain Coordinator central monitor
+output bool all_correct ''' +LAZY + ''' = correct_throttle and correct_torque_distr
+output bool box_all_correct ''' +LAZY + ''' = all_correct and box_all_correct[-1|true]
+}
+
+//Monitor Engine
+@1{
+input num actual_throttle''' +LAZY + '''
+}
+
+//Monitor Transmission
+@2{
+input num actual_torque_distr ''' +LAZY + '''
+}
+
+//Monitor PowerTrain Coordinator central monitor
+@3{
+}\n'''
+    i = 4
+    while i < N:
+        s += "@" + str(i) + "{\n}\n"
+        i+=1
+    return s
+
 #MAIN
 if len(sys.argv) < 7 :
    print "[generateLot]: need s : function to create Spec, topo: topology to use, lazy: lazy/eval, n : number of specs as parameters"
@@ -201,6 +296,16 @@ if SPEC == "lotUntil":
         spec = lotDecentUntil(TOPO, TYPE, "a",LAZY, N)
     elif DECENT=="cent":
         spec = lotCentUntil(TOPO, TYPE,"a",LAZY, N)
+
+if SPEC == "lotAutosar":
+    TYPE="num"
+    if N >= 4: #needs at least 4 monitors
+        if DECENT=="decent":
+            spec = lotDecentAutosar(TOPO, TYPE, "a",LAZY, N)
+        elif DECENT=="cent":
+            spec = lotCentAutosar(TOPO, TYPE,"a",LAZY, N)
+    else:
+        exit(0)
 
 printDir(DIR+"/"+TOPO+"/"+TYPE+"/"+LAZY+"/"+DECENT+"/"+str(N), SPEC, spec)
 
