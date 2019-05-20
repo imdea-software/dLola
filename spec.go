@@ -7,9 +7,10 @@ import (
 
 // parsed Output
 type OutputStream struct {
-	Name StreamName
-	Type StreamType
-	Eval bool
+	Output bool //true will make the system to request the value of the stream so it is computed while false will make it only be computed if needed in another stream
+	Name   StreamName
+	Type   StreamType
+	Eval   bool
 	//	Ticks TickingExpr
 	Expr Expr // chango to ValueExpr?
 }
@@ -172,7 +173,7 @@ func ProcessDeclarations(ds []interface{}) (*Spec, error) {
 			return spec, errors.New(str)
 		}
 		// OK. All matches
-		spec.Output[key] = OutputStream{key, def.Type, def.Eval /*, tick.Ticks*/, def.Expr}
+		spec.Output[key] = OutputStream{def.Output, key, def.Type, def.Eval /*, tick.Ticks*/, def.Expr}
 	}
 
 	//
@@ -244,12 +245,15 @@ func GetCheckedSpec(filename string) (*SpecDeploy, bool) {
 	//fmt.Printf(prefix + "Generating Pretty Print\n")
 	//fmt.Printf(PrettyPrintSpec(specDeploy.Spec, prefix))
 	prefix = "[dLola_type_checker]: "
-	CheckTypesSpec(specDeploy.Spec, prefix)
+	goodTypes := CheckTypesSpec(specDeploy.Spec, prefix)
+	if !goodTypes {
+		return nil, false
+	}
 	wf := AnalyzeWF(specDeploy.Spec)
 	if !wf {
-		specDeploy = nil
+		return nil, false
 	}
-	return specDeploy, wf
+	return specDeploy, goodTypes && wf
 }
 
 func AnalyzeWF(spec *Spec) bool {
@@ -352,7 +356,7 @@ func SubsConstants(spec *Spec) *Spec {
 	}
 	for _, o := range spec.Output { //we substitute constant in stream expressions
 		e := o.Expr.ConstantSubs(spec)
-		spec.Output[o.Name] = OutputStream{o.Name, o.Type, o.Eval, e}
+		spec.Output[o.Name] = OutputStream{o.Output, o.Name, o.Type, o.Eval, e}
 	}
 	//fmt.Print(PrettyPrintSpec(spec, "[subsconstants]"))
 	return spec
@@ -403,7 +407,7 @@ func PrettyPrintSpec(spec *Spec, prefix string) string {
 	return str
 }
 
-func CheckTypesSpec(spec *Spec, prefix string) {
+func CheckTypesSpec(spec *Spec, prefix string) bool {
 	typeVisitor := TypeVisitor{make(map[StreamName]StreamType), make([]string, 0), Unknown, false}
 	for _, v := range spec.Const { //we do this first because the order in which constants are iterated over is not always the same (using the same file)
 		typeVisitor.symTab[v.Name] = v.Type //introduce constant names as declared for the TypeVisitor
@@ -436,4 +440,5 @@ func CheckTypesSpec(spec *Spec, prefix string) {
 	for _, e := range typeVisitor.errors {
 		fmt.Printf(prefix+"Error %s\n", e)
 	}
+	return len(typeVisitor.errors) == 0
 }

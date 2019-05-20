@@ -23,22 +23,22 @@ def processOutput(filename, output, tracelen):
     totalMsgs = verdict["Metrics"]["NumMsgs"]
     totalPayload = verdict["Metrics"]["SumPayload"]
     totalRedirects = verdict["Metrics"]["RedirectedMsgs"]
-    maxDelay = verdict["Metrics"]["MaxDelay"]["Resp"]["SimplRounds"]
+    maxDelay = verdict["Metrics"]["MaxDelay"]
     avgDelay = verdict["Metrics"]["AvgDelay"]
-    minDelay = verdict["Metrics"]["MinDelay"]["Resp"]["SimplRounds"]
-    maxSimplRounds = verdict["Metrics"]["MaxSimplRounds"]["Resp"]["SimplRounds"]
+    minDelay = verdict["Metrics"]["MinDelay"]
+    maxSimplRounds = verdict["Metrics"]["MaxSimplRounds"]
     avgSimplRounds = verdict["Metrics"]["AvgSimplRounds"]
-    minSimplRounds = verdict["Metrics"]["MinSimplRounds"]["Resp"]["SimplRounds"]
-    memory = verdict["Metrics"]["Memory"]
-    memorystr = list(map(lambda x : str(x),memory))
+    minSimplRounds = verdict["Metrics"]["MinSimplRounds"]
+    memory = verdict["Metrics"]["MaxMemory"]
+    """memorystr = list(map(lambda x : str(x),memory))
     memorystring = ""
     for m in memorystr:
         memorystring += m + ","
-    memorystring = memorystring[:len(memorystring)-1]
+    memorystring = memorystring[:len(memorystring)-1]"""
     #memorystring = functools.reduce(operator.add, memorystr) #foldl
     #print memorystring
-    (topo, tipe, lazy, cent, nmons, spec) = processFilename(filename)
-    print convertCSV(topo, tipe, lazy, cent, nmons, spec, tracelen, str(totalMsgs), str(totalPayload), str(totalRedirects), str(maxDelay), str(avgDelay), str(minDelay), str(maxSimplRounds), str(avgSimplRounds), str(minSimplRounds), memorystring)
+    (topo, tipe, lazy, cent, nmons, spec,cNode) = processFilename(filename)
+    print convertCSV(topo, tipe, lazy, cent, nmons, spec, cNode, tracelen, str(totalMsgs), str(totalPayload), str(totalRedirects), str(maxDelay), str(avgDelay), str(minDelay), str(maxSimplRounds), str(avgSimplRounds), str(minSimplRounds), str(memory))
 
 def processFilename(filename):
     i = filename.find("generated/") + 10
@@ -68,13 +68,17 @@ def processFilename(filename):
         i += 1
     i += 1
     spec = ""
-    while i < len(filename) and filename[i] != ".":
+    while i < len(filename) and not filename[i].isdigit():
         spec = spec + filename[i]
         i += 1
-    return (topo, tipe, lazy, cent, nmons, spec)
+    cNode = ""
+    while i < len(filename) and filename[i] != ".":
+        cNode = cNode + filename[i]
+        i += 1
+    return (topo, tipe, lazy, cent, nmons, spec, cNode)
 
-def convertCSV(topo, tipe, lazy, cent, nmons, spec, tracelen, totalMsgs, totalPayload, totalRedirects, maxDelay, avgDelay, minDelay, maxSimplRounds, avgSimplRounds, minSimplRounds, memory):
+def convertCSV(topo, tipe, lazy, cent, nmons, spec, cnode, tracelen, totalMsgs, totalPayload, totalRedirects, maxDelay, avgDelay, minDelay, maxSimplRounds, avgSimplRounds, minSimplRounds, memory):
     #print topo+","+ tipe+","+ lazy+","+ cent+","+ nmons+","+ tracelen+","+ totalMsgs+","+ totalPayload+","+ totalRedirects+","+ maxDelay+","+ maxSimplRounds + "\n"
-    return topo+","+ tipe+","+ lazy+","+ cent+","+ nmons+","+ spec + "," + tracelen+","+ totalMsgs+","+ totalPayload+","+ totalRedirects+","+ maxDelay+","+ avgDelay+","+ minDelay+","+ maxSimplRounds+ avgSimplRounds+","+ minSimplRounds+","+ memory
+    return topo+","+ tipe+","+ lazy+","+ cent+","+ nmons+","+ spec + "," + cnode + ","+tracelen+","+ totalMsgs+","+ totalPayload+","+ totalRedirects+","+ maxDelay+","+ avgDelay+","+ minDelay+","+ maxSimplRounds +","+ avgSimplRounds+","+ minSimplRounds+","+ memory
 
 processOutput(sys.argv[1], sys.argv[2], sys.argv[3])

@@ -40,12 +40,14 @@ InputStreamDecl <- INPUT t:Type n:Name le:LazyEval? {
     return NewInputDecl(n,t, le, c.pos),nil
 }
 
-OutputDefinition <- d:DefOut t:Type n:Name le:LazyEval? ASSIGN e:Block {
-    return NewOutputDefinition(n,t,le, e, c.pos),nil
+OutputDefinition <- do:DefOut t:Type n:Name le:LazyEval? ASSIGN e:Block {
+    //fmt.Printf("do: %v\n", do)
+    return NewOutputDefinition(true,n,t,le, e, c.pos),nil
 }
 
 DefOut <- DEFINE / OUTPUT{
-       return string(c.text),nil
+       //return string(c.text) == "output" ,nil TODO: make this work, so that DEFINE returns false and OUTPUT true
+       return true,nil
 }
 
 LazyEval <- LAZY { return false, nil }

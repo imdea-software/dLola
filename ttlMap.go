@@ -40,8 +40,8 @@ func getStreamTtl(streamName StreamName, reverseDepen RevDepGraph, delta map[Str
 			for _, revDep := range revDepends { //revDep.Src == streamName
 				//fmt.Printf("revDep %s\n", revDep.Sprint())
 				ttl := -revDep.Weight //consider both positives & negatives shifts (positives need to be considered because of distances between computing monitors)
-				if revDep.Dest != streamName {
-					ttl += dists[delta[revDep.Dest]][delta[streamName]] //IMPORTANT: distance for the request(Lazy) to arrive
+				if delta[revDep.Dest] != delta[streamName] {
+					ttl += dists[delta[revDep.Dest]][delta[streamName]] //+ len(dists) //IMPORTANT: distance for the request(Lazy) to arrive
 				}
 				max = math.Max(max, float64(ttl))
 			}

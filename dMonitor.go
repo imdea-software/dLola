@@ -4,7 +4,7 @@ import (
 	//	"errors"
 	"encoding/json"
 	"fmt"
-	"math"
+	//"math"
 	//	"strconv"
 )
 
@@ -54,11 +54,11 @@ func (msg Msg) String() string {
 	}
 	resTime := ""
 	if msg.ResTime != nil {
-		resTime = fmt.Sprintf("%d", msg.ResTime)
+		resTime = fmt.Sprintf("%d", *msg.ResTime)
 	}
 	simpl := ""
 	if msg.SimplRounds != nil {
-		simpl = fmt.Sprintf("%d", msg.SimplRounds)
+		simpl = fmt.Sprintf("%d", *msg.SimplRounds)
 	}
 	return fmt.Sprintf("Msg{ kind = %s\nstream = %s\nvalue = %s\nresTime = %s\nsimplRounds = %s\nsrc = %d\ndst = %d\n}", msg.Kind.String(), msg.Stream.Sprint(), value, resTime, simpl, msg.Src, msg.Dst)
 	//return fmt.Sprintf("Msg{ kind = %s\nstream = %s\nResp = %s\nsrc = %d\ndst = %d\n}", msg.Kind.String(), msg.Stream.Sprint(), Resp, msg.Src, msg.Dst)
@@ -137,16 +137,34 @@ func (r *Resolved) String() string {
 	return string(json)
 }
 
+func (r *Resolved) GetDelay() int {
+	return r.Resp.ResTime - r.Stream.GetTick()
+}
+
 type Und struct {
 	exp          InstExpr
 	Eval         Eval
 	SimplRounds  SimplRounds
 	simplifiable bool //will be set to true at initialization and whenever something gets substituted, othw it will be false to avoid trying to simplify over and over the same expression without changes
 }
+
+func (u *Und) Sprint() string {
+	//return fmt.Sprintf("Resp{Value = %s, eval = %t, ResTime = %d, SimplRounds = %d, Ttl = %d}", r.Value.Sprint(), r.eval, r.ResTime, r.SimplRounds, r.Ttl)
+	json, _ := json.Marshal(u)
+	return string(json)
+}
+
 type Unresolved struct {
 	stream InstStreamExpr
 	und    Und
 }
+
+func (u *Unresolved) Sprint() string {
+	//return fmt.Sprintf("Resp{Value = %s, eval = %t, ResTime = %d, SimplRounds = %d, Ttl = %d}", r.Value.Sprint(), r.eval, r.ResTime, r.SimplRounds, r.Ttl)
+	json, _ := json.Marshal(u)
+	return string(json)
+}
+
 type ExpEval struct {
 	exp  InstExpr
 	eval Eval
@@ -155,26 +173,51 @@ type ExpEval struct {
 type RSet = map[InstStreamExpr]Resp //M.Map Stream Resp
 type USet = map[InstStreamExpr]Und  //M.Map Stream Und
 //type ExpSet = Spec                  //M.Map Stream (Exp, Eval)
+func printU(u USet) string {
+	s := "map:["
+	for stream, und := range u {
+		s += fmt.Sprintf("%s : {%s, %t, %d, %t}; ", stream.Sprint(), und.exp.Sprint(), und.Eval, und.SimplRounds, und.simplifiable)
+	}
+	s += "]"
+	return s
+}
+func printR(r RSet) string {
+	s := "map:["
+	for stream, resp := range r {
+		s += fmt.Sprintf("%s : {%s, %t, %d, %d}; ", stream.Sprint(), resp.Value.Sprint(), resp.Eval, resp.SimplRounds, resp.Ttl)
+	}
+	s += "]"
+	return s
+}
 
 type Metrics struct {
-	NumMsgs        int
-	SumPayload     int
-	RedirectedMsgs int // part of numMsgs
-	MaxDelay       *Resolved
-	AvgDelay       float64
-	MinDelay       *Resolved
-	MaxSimplRounds *Resolved
-	AvgSimplRounds float64
-	MinSimplRounds *Resolved
-	Memory         []int
+	NumMsgs         int
+	SumPayload      int
+	RedirectedMsgs  int // part of numMsgs
+	MaxDelay        int
+	maxDelayS       *Resolved
+	AvgDelay        float64
+	MinDelay        int
+	minDelayS       *Resolved
+	MaxSimplRounds  int
+	maxSimplRoundsS *Resolved
+	AvgSimplRounds  float64
+	MinSimplRounds  int
+	minSimplRoundsS *Resolved
+	memory          []int
+	MaxMemory       int
+	nResolved       int
 }
 
 func (m Metrics) String() string {
-	return fmt.Sprintf("Metrics: {numMsgs: %d, sumPayload: %d, redirectedMsgs: %d\n MaxDelay: %s\n, avgDelay: %f\n, MinDelay: %s\n MaxSimplRounds: %s\n avgSimplRounds: %f\n MinSimplRounds: %s\n memory: %v}", m.NumMsgs, m.SumPayload, m.RedirectedMsgs, m.MaxDelay.String(), m.AvgDelay, m.MinDelay.String(), m.MaxSimplRounds.String(), m.AvgSimplRounds, m.MinSimplRounds.String(), m.Memory)
+	return fmt.Sprintf("{NumMsgs: %d, SumPayload: %d, RedirectedMsgs: %d, MaxDelay: %d, MaxDelayS: %s, AvgDelay: %f, MinDelay: %d, MinDelayS: %s, MaxSimplRounds: %d, maxSimplRoundsS: %s, AvgSimplRounds: %f, MinSimplRounds: %d, minSimplRoundsS: %S, Memory: %v, MaxMemory: %d}", m.NumMsgs, m.SumPayload, m.RedirectedMsgs, m.MaxDelay, m.maxDelayS.String(), m.AvgDelay, m.MinDelay, m.minDelayS.String(), m.MaxSimplRounds, m.maxSimplRoundsS.String(), m.AvgSimplRounds, m.MinSimplRounds, m.minSimplRoundsS.String(), m.memory, m.MaxMemory)
 }
 
 func (m Metrics) Short() string {
-	return fmt.Sprintf("Metrics: {numMsgs: %d, sumPayload: %d, redirectedMsgs: %d,\n MaxDelay: %d, AvgDelay: %f, MinDelay: %d,\n MaxSimplRounds: %d, AvgSimplRounds: %f, MinSimplRounds: %d,\n memory: %v}", m.NumMsgs, m.SumPayload, m.RedirectedMsgs, m.MaxDelay.Resp.ResTime, m.AvgDelay, m.MinDelay.Resp.ResTime, m.MaxSimplRounds.Resp.SimplRounds, m.AvgSimplRounds, m.MinSimplRounds.Resp.SimplRounds, m.Memory)
+	json, _ := json.Marshal(m)
+	return string(json)
+	//return fmt.Sprintf("{\"NumMsgs\": \"%d\", \"SumPayload\": \"%d\", \"RedirectedMsgs\": \"%d\", \"MaxDelay\": \"%d\", \"AvgDelay\": \"%f\", \"MinDelay\": \"%d\", \"MaxSimplRounds\": \"%d\", \"AvgSimplRounds\": \"%f\", \"MinSimplRounds\": \"%d\", \"Memory\": \"%d\"}", m.NumMsgs, m.SumPayload, m.RedirectedMsgs, m.MaxDelay.Resp.ResTime, m.AvgDelay, m.MinDelay.Resp.ResTime, m.MaxSimplRounds.Resp.SimplRounds, m.AvgSimplRounds, m.MinSimplRounds.Resp.SimplRounds, max)
+
 }
 
 type Monitor struct {
@@ -220,23 +263,6 @@ func (m Monitor) isEval(s StreamName) bool {
 func (m Monitor) isLazy(s StreamName) bool {
 	return !m.isEval(s)
 }
-func printU(u USet) string {
-	s := "map:["
-	for istream, und := range u {
-		s += fmt.Sprintf("%s : {%s, %t, %d, %t}; ", istream.Sprint(), und.exp.Sprint(), und.Eval, und.SimplRounds, und.simplifiable)
-	}
-	s += "]"
-	return s
-}
-func printR(r RSet) string {
-	s := "map:["
-	for stream, resp := range r {
-		s += fmt.Sprintf("%s : {%s, %t, %d, %d}; ", stream.Sprint(), resp.Value.Sprint(), resp.Eval, resp.ResTime, resp.SimplRounds)
-	}
-	s += "]"
-	return s
-}
-
 func PrintMons(ms map[Id]*Monitor) string {
 	s := ""
 	for _, m := range ms {
@@ -246,7 +272,7 @@ func PrintMons(ms map[Id]*Monitor) string {
 }
 
 func NewMonitor(id, tracelen int, s Spec, received Received, routes map[Id]Id, delta map[StreamName]Id, depGraph DepGraphAdj, dep map[StreamName][]Id, inputChannels []chan Resolved, ttlMap map[StreamName]Time) Monitor {
-	return Monitor{id, received, inputChannels, make(USet), make(RSet), s, Pending{}, Output{}, Requested{}, 0, routes, delta, tracelen, depGraph, dep, make([]Resolved, 0), ttlMap, make(map[InstStreamExpr][]InstStreamExpr), Metrics{0, 0, 0, nil, 0.0, nil, nil, 0.0, nil, make([]int, 0)}}
+	return Monitor{id, received, inputChannels, make(USet), make(RSet), s, Pending{}, Output{}, Requested{}, 0, routes, delta, tracelen, depGraph, dep, make([]Resolved, 0), ttlMap, make(map[InstStreamExpr][]InstStreamExpr), Metrics{0, 0, 0, 0, nil, 0.0, 0, nil, 0, nil, 0.0, 0, nil, make([]int, 0), 0, 0}}
 }
 
 type Verdict struct {
@@ -258,13 +284,13 @@ type Verdict struct {
 }
 
 func (v Verdict) String() string {
-	//return fmt.Sprintf("Verdict{mons = %s,\n metrics: %v,\n triggers: %v}", PrintMons(v.mons), v.metrics.String(), v.triggers)
-	json, _ := json.Marshal(v)
-	return string(json)
+	return fmt.Sprintf("Verdict{mons = %s,\n metrics: %v,\n triggers: %v}", PrintMons(v.mons), v.Metrics.String(), v.Triggers)
+	/*json, _ := json.Marshal(v)
+	return string(json)*/
 }
 func (v Verdict) Short() string {
-	//return fmt.Sprintf("Verdict{metrics: %v\ntriggers: %v}", v.metrics.Short(), v.triggers)
-	//return fmt.Sprintf("Verdict: {%s, \ntriggers: %v}", v.metrics.Short(), v.triggers)
+	//return fmt.Sprintf("{\"Metrics\": %v, \"Triggers\": %v}", v.Metrics.Short(), v.Triggers)
+	//return fmt.Sprintf("Verdict: {%s, \ntriggers: %v}", v.Metrics.Short(), v.Triggers)
 	json, _ := json.Marshal(v)
 	return string(json)
 }
@@ -283,6 +309,7 @@ func ConvergeCountTrigger(mons map[Id]*Monitor) Verdict {
 	Avgsimplrounds := 0.0
 	var Minsimplrounds *Resolved
 	var totalmemory []int
+	var nResolved int
 	triggers := make([]Resolved, 0)
 	for _, m := range mons {
 		//fmt.Printf("%s\n", m.String())
@@ -291,38 +318,51 @@ func ConvergeCountTrigger(mons map[Id]*Monitor) Verdict {
 		totalRedirects += m.metrics.RedirectedMsgs
 		//r := Resolved{InstStreamFetchExpr{"s", -1}, Resp{InstIntLiteralExpr{0}, false, 0, 0, 0}}
 		//for _, m := range mons {
-		if m.metrics.MaxDelay != nil && (Maxdelay == nil || Maxdelay.Resp.ResTime < m.metrics.MaxDelay.Resp.ResTime) {
-			Maxdelay = m.metrics.MaxDelay
+		if m.metrics.maxDelayS != nil && (Maxdelay == nil || m.metrics.maxDelayS.GetDelay() > Maxdelay.GetDelay()) {
+			Maxdelay = m.metrics.maxDelayS
 			//Maxdelay.Resp = Resp
 		}
 		Avgdelay += m.metrics.AvgDelay
-		if m.metrics.MinDelay != nil && (Mindelay == nil || Mindelay.Resp.ResTime < m.metrics.MinDelay.Resp.ResTime) {
-			Mindelay = m.metrics.MinDelay
+		if m.metrics.minDelayS != nil && (Mindelay == nil || m.metrics.minDelayS.GetDelay() < Mindelay.GetDelay()) {
+			Mindelay = m.metrics.minDelayS
 			//mindelay.Resp = Resp
 		}
-		if m.metrics.MaxSimplRounds != nil && (Maxsimplrounds == nil || Maxsimplrounds.Resp.SimplRounds < m.metrics.MaxSimplRounds.Resp.SimplRounds) {
-			Maxsimplrounds = m.metrics.MaxSimplRounds
+		if m.metrics.maxSimplRoundsS != nil && (Maxsimplrounds == nil || m.metrics.maxSimplRoundsS.Resp.SimplRounds > Maxsimplrounds.Resp.SimplRounds) {
+			Maxsimplrounds = m.metrics.maxSimplRoundsS
 			//Maxsimplrounds.Resp = Resp
 		}
 		Avgsimplrounds += m.metrics.AvgDelay
-		if m.metrics.MinSimplRounds != nil && (Minsimplrounds == nil || Minsimplrounds.Resp.SimplRounds < m.metrics.MinSimplRounds.Resp.SimplRounds) {
-			Minsimplrounds = m.metrics.MinSimplRounds
+		if m.metrics.minSimplRoundsS != nil && (Minsimplrounds == nil || m.metrics.minSimplRoundsS.Resp.SimplRounds < Minsimplrounds.Resp.SimplRounds) {
+			Minsimplrounds = m.metrics.minSimplRoundsS
 			//minsimplrounds.Resp = Resp
 		}
 		//TODO:addition of memories
 		//fmt.Printf("Memory of mon: %d, %v", m.nid, m.metrics.memory)
 		if len(totalmemory) == 0 {
-			totalmemory = m.metrics.Memory
+			totalmemory = m.metrics.memory
 		} else {
-			addMemories(totalmemory, m.metrics.Memory)
-			m.metrics.Memory = make([]int, 0) //reset them to measure in the next tick
+			addMemories(totalmemory, m.metrics.memory)
+			m.metrics.memory = make([]int, 0) //reset them to measure in the next tick
 		}
 		//}
-		Avgdelay /= float64(len(mons))
-		Avgsimplrounds /= float64(len(mons))
+		//Avgdelay /= float64(len(mons))
+		//Avgsimplrounds /= float64(len(mons))
 		triggers = append(triggers, m.trigger...)
+		nResolved += m.metrics.nResolved
 	}
-	return Verdict{mons, Metrics{totalMsgs, totalPayload, totalRedirects, Maxdelay, Avgdelay, Mindelay, Maxsimplrounds, Avgsimplrounds, Minsimplrounds, totalmemory}, triggers}
+	//fmt.Printf("delay acc: %f, nResolved: %d, simpl acc: %f\n", Avgdelay, nResolved, Avgsimplrounds)
+	Avgdelay /= float64(nResolved)       //obtained by adding all the delays and dividing by the total number of elements in R (of all monitors)
+	Avgsimplrounds /= float64(nResolved) //obtained by adding all the simplRounds and dividing by the total number of elements in R (of all monitors)
+	//fmt.Printf("avg delay: %f, nResolved: %d, avg simpl: %f\n", Avgdelay, nResolved, Avgsimplrounds)
+	maxmemory := 0
+	for _, mem := range totalmemory {
+		if mem > maxmemory {
+			maxmemory = mem
+		}
+	}
+	maxsimplrounds := Maxsimplrounds.Resp.SimplRounds
+	minsimplrounds := Minsimplrounds.Resp.SimplRounds
+	return Verdict{mons, Metrics{totalMsgs, totalPayload, totalRedirects, Maxdelay.GetDelay(), Maxdelay, Avgdelay, Mindelay.GetDelay(), Mindelay, maxsimplrounds, Maxsimplrounds, Avgsimplrounds, minsimplrounds, Minsimplrounds, totalmemory, maxmemory, nResolved}, triggers}
 }
 
 //both slices have the same length
@@ -464,6 +504,9 @@ func (m *Monitor) processQ() {
 			switch msg.Kind {
 			case Res:
 				m.r[msg.Stream] = msgToResp(&msg, m.ttlMap, &m.expr)
+				if _, ok := m.req[msg.Stream]; ok {
+					delete(m.req, msg.Stream)
+				}
 			case Req:
 				m.pen = append(m.pen, msg)
 			case Trigger:
@@ -501,7 +544,7 @@ func (m *Monitor) generateEquations() {
 	//fmt.Printf("[%d]:GENERATEEQ: %s\n", m.nid, m.String())
 	if m.t < m.tracelen { //expressions will be intantiated from tick 0 to tracelen - 1
 		for _, o := range m.expr.Output {
-			if m.delta[o.Name] == m.nid {
+			if m.computes(o.Name) {
 				e := o.Expr
 				i := e.InstantiateExpr(m.t, m.tracelen)
 				//fmt.Printf("Instanced expr: %s\n", i.Sprint())
@@ -541,6 +584,7 @@ func (m *Monitor) simplify() {
 					//fmt.Printf("[%d]New Resp: %v",m.nid, newresp)
 					m.r[stream] = newresp //add it to R
 					delete(m.u, stream)   //remove it from U
+					m.metrics.nResolved++
 				}
 				someSimpl = someSimpl || isResolved
 			}
@@ -551,7 +595,8 @@ func (m *Monitor) simplify() {
 func toResp(stream InstStreamExpr, t int, und Und, ttlMap map[StreamName]Time) (Resp, bool) {
 	//fmt.Printf("To Resp: %v\n", und.exp)
 	var r Resp
-	ttl := int(math.Max(0, float64(ttlMap[stream.GetName()]-(t-stream.GetTick())))) //time remaining to remove from R: ttl - max(0, now-instantiation)
+	//ttl := int(math.Max(0, float64(ttlMap[stream.GetName()]-(t-stream.GetTick())))) //time remaining to remove from R: ttl - max(0, now-instantiation)
+	ttl := ttlMap[stream.GetName()]
 	switch und.exp.(type) {
 	case InstTruePredicate:
 		return Resp{und.exp, und.Eval, t, und.SimplRounds, ttl}, true
@@ -590,7 +635,7 @@ func (m *Monitor) addRes() {
 	for _, penMsg := range m.pen { //LAZY streams need to be requested in order to send responses
 		if resp, ok := m.r[penMsg.Stream]; ok { //note this msg will no longer be in pen
 			newMsg := createMsg(penMsg.Stream, &resp, m.nid, penMsg.Src)
-			//fmt.Printf("Resolved LAZY %s\n", newMsg.String())
+			//fmt.Printf("[%d][%d]Resolved LAZY %s\n", m.nid, m.t, newMsg.String())
 			if newMsg.Dst != m.nid { //newMsg will be sent only if destiny is another monitor
 				m.sendMsg(&newMsg)
 			}
@@ -617,9 +662,22 @@ func createMsg(stream InstStreamExpr, resp *Resp, id, dst Id) Msg {
 }
 func (m *Monitor) addReq() { //TODO: think of extracting part to the offline
 	//fmt.Printf("[%d]:ADDREQ: %s\n", m.nid, m.String())
-	for _, p := range m.pen {
-		if !m.expr.Output[p.Stream.GetName()].Eval { //we only need to analyze dependencies to create Reqs for LAZY streams
-			createReqMsgsPen(p.Stream, m)
+	if true { //need to resolve ALL streams
+		for stream, und := range m.u {
+			//if m.isLazy(stream.GetName()) { NO!! the dependencies must be lazy but not the stream in U!!
+			adjacencies := m.depGraph[stream.GetName()]
+			dependencies := getUdependencies(stream, adjacencies, und.exp)
+			for _, d := range dependencies {
+				//fmt.Printf("[%d][%d]Stream %s, Dependency '%s'\n", m.nid, m.t, stream.Sprint(), d.Sprint())
+				createReqStream(d, m)
+			}
+			//}
+		}
+	} else { //need to resolve strictly only Pen streams and whatever is needed for this
+		for _, p := range m.pen {
+			if m.isLazy(p.Stream.GetName()) { //we only need to analyze dependencies to create Reqs for LAZY streams
+				createReqMsgsPen(p.Stream, m)
+			}
 		}
 	}
 }
@@ -636,10 +694,14 @@ func createReqMsgsPen(stream InstStreamExpr, m *Monitor) {
 		for i := 0; i < len(dependencies); i++ {
 			depStream := dependencies[i]
 			//fmt.Printf("Adjacency %s\n", adj.Sprint())
+			//fmt.Printf("[%d]Dependencies %v\n", m.nid, dependencies)
 			_, resolved := m.r[depStream]
-			if !resolved { //if not resolved we need to Request it and continue analyzing sub-dependencies
-				createReqStream(depStream, m)
-				dependencies = addNextLevelDependencies(dependencies, obtainDependencies(depStream, m), m.r)
+			//_, requested := m.req[depStream]
+			if !resolved /*&& !requested*/ { //if not resolved and not requested we need to Request it and continue analyzing sub-dependencies (we don't need subdependencies of already requested streams!!!)
+				created := createReqStream(depStream, m)
+				if !created && m.computes(depStream.GetName()) { //we only need direct subdependencies of the streams computed at m, and we do not need to go lower TODO CHECK!!!
+					dependencies = addNextLevelDependencies(dependencies, obtainDependencies(depStream, m), m)
+				}
 			}
 			//fmt.Printf("next level dependencies after: %s\n", SprintStreams(dependencies))
 		}
@@ -647,6 +709,7 @@ func createReqMsgsPen(stream InstStreamExpr, m *Monitor) {
 	}
 }
 
+//search for lower-level dependencies of 'stream' in the dependency graph
 func obtainDependencies(stream InstStreamExpr, m *Monitor) []InstStreamExpr {
 	var dependencies []InstStreamExpr
 	adjacencies := m.depGraph[stream.GetName()]
@@ -660,16 +723,19 @@ func obtainDependencies(stream InstStreamExpr, m *Monitor) []InstStreamExpr {
 }
 
 //will create a req msg for depStream and add it to out iff the stream is not in R, assigned to other monitor(delta), not previously requested, lazy and have been instanced
-func createReqStream(depStream InstStreamExpr, m *Monitor) {
+func createReqStream(depStream InstStreamExpr, m *Monitor) bool {
 	_, resolved := m.r[depStream]
 	_, requested := m.req[depStream]
-	//fmt.Printf("Dependency could be intantiated tlen: %d\n%s\n !resolved %t, !requested %t, lazy %t, assigned to other monitor: %t\n", m.tracelen, depStream.Sprint(), !resolved, !requested, m.isLazy(depStream.GetName()), !m.computes(depStream.GetName()))
+	created := false
+	//fmt.Printf("[%d][%d]Dependency '%s' could be intantiated tlen: %d\n !resolved %t, !requested %t, lazy %t, assigned to other monitor: %t\n", m.nid, m.t, depStream.Sprint(), m.tracelen, !resolved, !requested, m.isLazy(depStream.GetName()), !m.computes(depStream.GetName()))
 	if !resolved && !m.computes(depStream.GetName()) && m.isLazy(depStream.GetName()) && !requested && depStream.GetTick() <= m.t { //not in R, not assigned to this monitor, not eval and not already requested, allow request of streams that have not yet been instanced?
-		//fmt.Printf("Creating Request: %s\n", depStream.Sprint())
+		//fmt.Printf("[%d][%d]Creating Request: %s\n", m.nid, m.t, depStream.Sprint())
 		msg := createMsg(depStream, nil, m.nid, m.delta[depStream.GetName()])
 		m.sendMsg(&msg)
-		m.req[depStream] = struct{}{} //mark it as requested
+		m.req[depStream] = struct{}{} //mark it as requested\
+		created = true
 	}
+	return created
 }
 func convertToStreams(stream InstStreamExpr, adjacencies []Adj, tlen int) []InstStreamExpr {
 	r := make([]InstStreamExpr, 0)
@@ -684,57 +750,61 @@ func convertToStreams(stream InstStreamExpr, adjacencies []Adj, tlen int) []Inst
 }
 
 //will change dependencies
-func addNextLevelDependencies(dependencies, candidates []InstStreamExpr, r RSet) []InstStreamExpr {
-	//fmt.Printf("next level dependencies before: %s\ncandidates: %s\n", SprintStreams(dependencies), SprintStreams(candidates))
+func addNextLevelDependencies(dependencies, candidates []InstStreamExpr, m *Monitor) []InstStreamExpr {
+	//fmt.Printf("[%d][%d]next level dependencies before: %s\ncandidates: %s\n", m.nid, m.t, SprintStreams(dependencies), SprintStreams(candidates))
 	for _, c := range candidates {
-		_, resolved := r[c]
+		_, resolved := m.r[c]
 		if !elemStream(dependencies, c, EqInstStreamExpr) && !resolved { //add if not already present and not resolved(will also make its dependencies not be checked, since they're not useful)
 			dependencies = append(dependencies, c)
 		}
 	}
-	//fmt.Printf("next level dependencies after: %s\n", SprintStreams(dependencies))
+	//fmt.Printf("[%d][%d]next level dependencies after: %s\n", m.nid, m.t, SprintStreams(dependencies))
 	return dependencies
 }
 
 func (m *Monitor) measureBeforePruning() {
 	//fmt.Printf("Measures: %v\n", m.metrics)
-	Maxdelay := m.metrics.MaxDelay
+	Maxdelay := m.metrics.maxDelayS
 	Avgdelay := 0.0
-	Mindelay := m.metrics.MinDelay
-	Maxsimplrounds := m.metrics.MaxSimplRounds
+	Mindelay := m.metrics.minDelayS
+	Maxsimplrounds := m.metrics.maxSimplRoundsS
 	Avgsimplrounds := 0.0
-	Minsimplrounds := m.metrics.MinSimplRounds
+	Minsimplrounds := m.metrics.minSimplRoundsS
 
 	for stream, resp := range m.r {
-		//fmt.Printf("R elem: %s, %v\n", stream.Sprint(), resp)
-		if Maxdelay == nil || resp.ResTime > Maxdelay.Resp.ResTime {
-			Maxdelay = &Resolved{stream, resp}
-		}
-		Avgdelay += float64(resp.ResTime)
-		if Mindelay == nil || resp.ResTime < Mindelay.Resp.ResTime {
-			Mindelay = &Resolved{stream, resp}
-		}
-		if Maxsimplrounds == nil || resp.SimplRounds > Maxsimplrounds.Resp.SimplRounds {
-			Maxsimplrounds = &Resolved{stream, resp}
-		}
-		Avgsimplrounds += float64(resp.SimplRounds)
-		if Minsimplrounds == nil || resp.SimplRounds < Minsimplrounds.Resp.SimplRounds {
-			Minsimplrounds = &Resolved{stream, resp}
+		if m.computes(stream.GetName()) {
+			//fmt.Printf("R elem: %s, %v\n", stream.Sprint(), resp)
+			delay := resp.ResTime - stream.GetTick()
+			if Maxdelay == nil || delay > Maxdelay.GetDelay() {
+				Maxdelay = &Resolved{stream, resp}
+			}
+			Avgdelay += float64(delay)
+			if Mindelay == nil || delay < Mindelay.GetDelay() {
+				Mindelay = &Resolved{stream, resp}
+			}
+			if Maxsimplrounds == nil || resp.SimplRounds > Maxsimplrounds.Resp.SimplRounds {
+				Maxsimplrounds = &Resolved{stream, resp}
+			}
+			Avgsimplrounds += float64(resp.SimplRounds)
+			if Minsimplrounds == nil || resp.SimplRounds < Minsimplrounds.Resp.SimplRounds {
+				Minsimplrounds = &Resolved{stream, resp}
+			}
 		}
 	}
-	m.metrics.MaxDelay = Maxdelay
+	m.metrics.maxDelayS = Maxdelay
 	m.metrics.AvgDelay = Avgdelay
-	m.metrics.MinDelay = Mindelay
-	m.metrics.MaxSimplRounds = Maxsimplrounds
+	m.metrics.minDelayS = Mindelay
+	m.metrics.maxSimplRoundsS = Maxsimplrounds
 	m.metrics.AvgSimplRounds = Avgsimplrounds
-	m.metrics.MinSimplRounds = Minsimplrounds
+	m.metrics.minSimplRoundsS = Minsimplrounds
 	//fmt.Printf("Updated Measures: %v\n", m.metrics)
 }
 
 //R Pruning
 func (m *Monitor) pruneR() {
 	for stream, resp := range m.r {
-		if resp.Ttl == 0 {
+		if resp.Ttl == 0 { //TODO: WHY IS THIS +1 needed?? UPDATE: now it is not needed(changed to ==0) AddReq traverses U and uses getUdependencies!
+			//fmt.Printf("[%d][%d]Pruning %s\n", m.nid, m.t, stream.Sprint())
 			delete(m.r, stream)
 		} else {
 			resp.Ttl--
@@ -745,5 +815,5 @@ func (m *Monitor) pruneR() {
 
 func (m *Monitor) measureAfterPruning() {
 	//fmt.Printf("memory u: %v, r: %v\n", m.u, m.r)
-	m.metrics.Memory = append(m.metrics.Memory, len(m.u)+len(m.r)) //R will be already pruned, a measure will be taken at each tick
+	m.metrics.memory = append(m.metrics.memory, len(m.u)+len(m.r)+len(m.pen)+len(m.req)) //R will be already pruned, a measure will be taken at each tick
 }

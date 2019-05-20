@@ -73,6 +73,8 @@ func ringshortRoute(nmons, src int) map[Id]Id {
 func shorterUpwards(src, i, nmons int) bool {
 	return (i-src > 0 && math.Abs(float64(i-src))/float64(nmons) <= 0.5) || (i-src < 0 && math.Abs(float64(i-src))/float64(nmons) > 0.5)
 }
+
+/*line of the form 0 1 2 3 4 5 ...
 func lineRoute(nmons, src int) map[Id]Id {
 	r := make(map[Id]Id)
 	for i := 0; i < nmons; i++ {
@@ -83,6 +85,39 @@ func lineRoute(nmons, src int) map[Id]Id {
 				r[i] = (src + 1) % nmons
 			} else {
 				r[i] = (src - 1) % nmons
+			}
+		}
+
+	}
+	return r
+}*/
+//of the form ... 5 3 1 0 2 4 6 ... with 0 in the middle
+func lineRoute(nmons, src int) map[Id]Id {
+	r := make(map[Id]Id)
+	even := src%2 == 0
+	for i := 0; i < nmons; i++ { //i will be the destiny
+		if i == src { //to itself
+			r[i] = src
+		} else if src == 0 {
+			if i%2 == 0 {
+				r[i] = 2 //right
+			} else {
+				r[i] = 1 //left
+			}
+		} else if even { //even nums
+			if i != 0 && i%2 == 0 && i > src {
+				r[i] = src + 2 //right
+			} else {
+				r[i] = src - 2 //left
+			}
+
+		} else { //odd nums
+			if i%2 != 0 && i > src {
+				r[i] = src + 2 //left
+			} else if src == 1 && i%2 == 0 {
+				r[i] = 0
+			} else { //to the right, i%2!=0 or i%2==0 but src!=1
+				r[i] = src - 2 //right
 			}
 		}
 
@@ -224,9 +259,9 @@ func GenerateReqs(spec *Spec, past_future, trigger string, tlen int, delta map[S
 	}
 	reqs := make(map[Id][]Msg)
 	//fmt.Printf("Generrating reqs\n")
-	depGraph := SpecToGraph(spec)
+	//depGraph := SpecToGraph(spec)
 	for _, o := range spec.Output {
-		if RootStream(o.Name, depGraph) {
+		if !o.Eval { // we request all lazy streams, FUTURE: the marking of output streams in order to be computed is left for future research //RootStream(o.Name, depGraph) {
 			stream := InstStreamFetchExpr{o.Name, tick_req}
 			dst := delta[o.Name]
 			m := Msg{kind, stream, nil, nil, nil, dst, dst} //src of the msgs will be themselves so they do not emit a response msg(should be changed to the monitor to whom to transmit the verdict)

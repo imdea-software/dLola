@@ -49,7 +49,7 @@ function processFile {
 }
 
 
-if [ $# -ne 5 ] ; then
+if [ $# -lt 5 ] ; then
    echo "[rerun]: need root directory from which to start the search for files to compile and execute, num of processes, extension of the files, options and tracelen"
    exit 0
 fi
@@ -60,18 +60,24 @@ EXT=$3
 OPTIONS=$4
 TLEN=$5
 OPTIONS="${OPTIONS} ${TLEN}"
-PROGRAM="go run main.go" #generated/clique/num/eval/decent/10/lotAcc.txt #./dLolaSys
+PROGRAM="./dLolaSys " #$6 #generated/clique/num/eval/decent/10/lotAcc.txt #./dLolaSys
 #printf $CODEDIR
 
-python -m py_compile processOutput.py
-chmod 770 *.pyc
+if [ $# -ge 6 ] && [ $6 == "build" ]; then
+    python -m py_compile processOutput.py &&
+    chmod 770 *.pyc &&
+    cd .. &&
+    make &&
+    cd ./test &&
+    go build -buildmode=exe -o dLolaSys
+fi
 DATE=$(date --rfc-3339='date')
-flock -x $CODEDIR/results$DATE.txt printf "topo,type,lazy,cent,nmons,spec,tracelen,totalMsgs,totalPayload,totalRedirects,maxDelay,maxSimplRounds\n" > $CODEDIR/results$DATE.txt
+flock -x $CODEDIR/results$DATE.txt printf "topo,type,lazy,cent,nmons,spec,cnode,tracelen,totalMsgs,totalPayload,totalRedirects,maxDelay,avgDelay,minDelay,maxSimplRounds,avgSimplRounds,minSimplRounds,memory\n" > $CODEDIR/results$DATE.txt
 processDir $CODEDIR $PROC $OPTIONS
-
+#echo DONE
 #run them as requests, NOT TRIGGERS, othw it will terminate as soon as the first trigger gets resolved!!! (and the performance won't be realistic)
-#./rerun.sh /home/luismigueldanielsson/go/src/gitlab.software.imdea.org/luismiguel.danielsson/dLola/test/generated 4 spec "past req" 10
-#./rerun.sh /home/luismigueldanielsson/go/src/gitlab.software.imdea.org/luismiguel.danielsson/dLola/test/generated 4 spec "past trigger" 10
+#./rerun.sh /home/luismigueldanielsson/go/src/gitlab.software.imdea.org/luismiguel.danielsson/dLola/test/generated 2 spec "past req" 10 build
+#./rerun.sh /home/luismigueldanielsson/go/src/gitlab.software.imdea.org/luismiguel.danielsson/dLola/test/generated 2 spec "past trigger" 10 build
 
 #server
 #compiling for the server in dLola/test where main.go is located
@@ -79,4 +85,4 @@ processDir $CODEDIR $PROC $OPTIONS
 #scp dLolaSys rerun.sh generateAllTests.sh generateLot.py processOutput.py luismiguel.danielsson@zeus.software.imdea.org:~/RV/go/
 #./generateAll.sh ./generated
 #use just 8 processes in order not to exhaust the server resources (and not get errors therefore)
-#./rerun.sh ~/RV/go/generated 8 spec "past req" 100000
+#./rerun.sh ~/RV/go/generated 6 spec "past req" 1000000

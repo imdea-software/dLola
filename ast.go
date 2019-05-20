@@ -85,11 +85,12 @@ func NewTopoMonitorDecls(t, m interface{}) TopoMonitorDecls {
 }*/
 
 type OutputDefinition struct {
-	Name StreamName
-	Type StreamType
-	Eval bool
-	Expr Expr // chango to ValueExpr?
-	Pos  Position
+	Output bool
+	Name   StreamName
+	Type   StreamType
+	Eval   bool
+	Expr   Expr // chango to ValueExpr?
+	Pos    Position
 }
 
 func NewPosition(p interface{}) Position {
@@ -116,11 +117,11 @@ func NewOutputDecl(n, t, p interface{}) OutputDecl {
 	return TicksDecl{name, expr}
 }*/
 
-func NewOutputDefinition(n, t, le, e, p interface{}) OutputDefinition {
+func NewOutputDefinition(o, n, t, le, e, p interface{}) OutputDefinition {
 	name := getStreamName(n)
 	expr := e.(Expr)
 	eval := getEval(le)
-	return OutputDefinition{name, t.(StreamType), eval, expr, NewPosition(p)}
+	return OutputDefinition{o.(bool), name, t.(StreamType), eval, expr, NewPosition(p)}
 }
 
 func getStreamName(a interface{}) StreamName {
