@@ -414,6 +414,38 @@ def lotCentMode(TOPO, TYPE, STREAM, LAZY, N, CNODE):
         i += 1
     return s
 
+#PingPong is not finished!!!!
+def lotPingPongOutput(TYPE, STREAM, LAZY, i, j):
+    return "output " + TYPE + " m" + str(i) + " "+LAZY +" = if "+ STREAM + str(i) + " then a"+ str(j) +" and b"+ str(j) +" and c"+ str(j) +" else d"+ str(j) +" and e"+ str(j) +" and f"+ str(j) +"\n"
+
+def lotDecentPingPong(TOPO, TYPE, STREAM, LAZY, N):
+    s = TOPO
+    i = 0
+    while i < N:
+        s += "\n@" + str(i) + "{\n"
+            s += lotInput(TYPE, STREAM, LAZY, i)
+            s += lotPinPongOutput(TYPE, STREAM, LAZY, i,i-1)
+        s += "}\n"
+        i += 1
+    return s    
+    
+
+def lotCentPingPong(TOPO, TYPE, STREAM, LAZY, N, CNODE):
+    s = TOPO
+    i = 0
+    while i < N: #decentralized observations
+        s += "\n@" + str(i) + "{\n"
+        s += lotInput(TYPE, "a", LAZY, i)
+        if i == CNODE:#centralized computations
+            j = 0
+            while j < N:
+                s += lotInput(TYPE, STREAM, LAZY, j)
+                s += lotPingPongOutput(TYPE,STREAM, LAZY, j, j)
+                j += 1
+        s += "}\n" #no central node
+        i += 1
+    return s
+
 #MAIN
 if len(sys.argv) < 7 :
    print "[generateLot]: need s : function to create Spec, topo: topology to use, lazy: lazy/eval, decent/cent, n : number of specs as parameters, cnode: central node for centralized specs"
